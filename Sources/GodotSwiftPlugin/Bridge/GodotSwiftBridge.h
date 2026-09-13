@@ -20,29 +20,24 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Foundation
+#ifndef GODOT_SWIFT_BRIDGE_H
+#define GODOT_SWIFT_BRIDGE_H
 
-/// Base protocol for all native Godot iOS/Apple plugins written in Swift.
-public protocol GodotPlugin: AnyObject {
-    /// The unique singleton name registered in Godot Engine (e.g., "ATT", "AdMob").
-    static var pluginName: String { get }
+#include "core/object/object.h"
 
-    /// Method registration hook called upon initialization.
-    func registerMethods(in registry: GodotPluginRegistry)
+class GodotSwiftSingleton : public Object {
+	String plugin_name;
 
-    /// Lifecycle hook called after the plugin is registered.
-    func onInit()
+public:
+	virtual Variant callp(const StringName &p_method, const Variant **p_args, int p_argcount, Callable::CallError &r_error) override;
 
-    /// Lifecycle hook called when the plugin is deinitialized.
-    func onDeinit()
-}
+	void add_signal(const String &p_name);
 
-public extension GodotPlugin {
-    func onInit() {}
-    func onDeinit() {}
+	GodotSwiftSingleton(const String &p_name);
+	virtual ~GodotSwiftSingleton();
+};
 
-    /// Helper to emit signals back to Godot through the shared registry.
-    func emitSignal(_ signalName: String, args: [Any] = []) {
-        GodotPluginRegistry.shared.emitSignal(Self.pluginName, signalName: signalName, args: args)
-    }
-}
+void godot_swift_initialize_embedded_plugins();
+void godot_swift_deinitialize_embedded_plugins();
+
+#endif // GODOT_SWIFT_BRIDGE_H
