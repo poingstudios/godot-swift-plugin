@@ -1,9 +1,44 @@
-.DS_Store
-/.build
+# Swift / SPM specific ignores
+.build/
 /Packages
+.swiftpm/
+Package.resolved
+
+# Apple / Xcode specific ignores
+*.xcresult
+*.xcuserstate
+*.xcworkspace
+*.xcodeproj
+*.xcarchive
 xcuserdata/
 DerivedData/
-.swiftpm/xcode/package.xcworkspace/
-.swiftpm/configuration/
-*.xcodeproj
-*.xcworkspace
+*.hmap
+*.LinkFileList
+
+build/
+bin/
+*.a
+!Sources/**/lib/*.a
+*.o
+*.d
+*.dia
+*.dylib
+*.so
+*.dll
+
+# OS specific ignores
+.DS_Store
+.DS_STORE
+Thumbs.db
+
+# Editor & Tool ignores
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.bak
+*.tmp
+*.log
+.antigravitycli/
+

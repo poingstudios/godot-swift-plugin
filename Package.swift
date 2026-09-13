@@ -12,6 +12,7 @@ let package = Package(
     products: [
         .library(
             name: "GodotSwiftPlugin",
+            type: .static,
             targets: ["GodotSwiftPlugin"]
         ),
     ],
@@ -19,7 +20,13 @@ let package = Package(
         .target(
             name: "GodotSwiftPlugin",
             dependencies: [],
-            path: "Sources/GodotSwiftPlugin"
+            path: "Sources/GodotSwiftPlugin",
+            exclude: ["Bridge"]
+        ),
+        .testTarget(
+            name: "GodotSwiftPluginTests",
+            dependencies: ["GodotSwiftPlugin"],
+            path: "Tests/GodotSwiftPluginTests"
         ),
     ]
 )
