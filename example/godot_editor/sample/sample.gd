@@ -22,17 +22,17 @@
 
 extends Control
 
-@onready var _log_label: RichTextLabel = $VBoxContainer/ScrollContainer/LogLabel
-@onready var _btn_ping: Button = $VBoxContainer/GridContainer/BtnPing
-@onready var _btn_add: Button = $VBoxContainer/GridContainer/BtnAdd
-@onready var _btn_mult: Button = $VBoxContainer/GridContainer/BtnMultiply
-@onready var _btn_profile: Button = $VBoxContainer/GridContainer/BtnProfile
-@onready var _btn_update_profile: Button = $VBoxContainer/GridContainer/BtnUpdateProfile
-@onready var _btn_start_session: Button = $VBoxContainer/GridContainer/BtnStartSession
-@onready var _btn_end_session: Button = $VBoxContainer/GridContainer/BtnEndSession
-@onready var _btn_sig_profile: Button = $VBoxContainer/GridContainer/BtnSigProfile
-@onready var _btn_sig_score: Button = $VBoxContainer/GridContainer/BtnSigScore
-@onready var _btn_sig_end: Button = $VBoxContainer/GridContainer/BtnSigEnd
+@onready var _log_label := $VBoxContainer/ScrollContainer/LogLabel as RichTextLabel
+@onready var _btn_ping := $VBoxContainer/GridContainer/BtnPing as Button
+@onready var _btn_add := $VBoxContainer/GridContainer/BtnAdd as Button
+@onready var _btn_mult := $VBoxContainer/GridContainer/BtnMultiply as Button
+@onready var _btn_profile := $VBoxContainer/GridContainer/BtnProfile as Button
+@onready var _btn_update_profile := $VBoxContainer/GridContainer/BtnUpdateProfile as Button
+@onready var _btn_start_session := $VBoxContainer/GridContainer/BtnStartSession as Button
+@onready var _btn_end_session := $VBoxContainer/GridContainer/BtnEndSession as Button
+@onready var _btn_sig_profile := $VBoxContainer/GridContainer/BtnSigProfile as Button
+@onready var _btn_sig_score := $VBoxContainer/GridContainer/BtnSigScore as Button
+@onready var _btn_sig_end := $VBoxContainer/GridContainer/BtnSigEnd as Button
 
 
 func _ready() -> void:

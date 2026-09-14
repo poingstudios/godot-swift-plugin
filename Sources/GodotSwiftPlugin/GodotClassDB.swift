@@ -288,17 +288,20 @@ public final class GodotClassDB: @unchecked Sendable {
         guard let engineObj else { return }
 
         var engineVariant = GodotVariantBuffer()
+        defer { engineVariant.destroy(using: gi) }
         engineVariant.withUnsafeMutableRawPointer { engineVarPtr in
             var objPtrCopy = engineObj
             variantFromObj(engineVarPtr, &objPtrCopy)
         }
 
         var nameVariant = GodotVariantBuffer()
+        defer { nameVariant.destroy(using: gi) }
         nameVariant.withUnsafeMutableRawPointer { nameVarPtr in
             GodotVariant.writeVariant(name, to: nameVarPtr)
         }
 
         var instanceVariant = GodotVariantBuffer()
+        defer { instanceVariant.destroy(using: gi) }
         instanceVariant.withUnsafeMutableRawPointer { instanceVarPtr in
             var objPtrCopy = object
             variantFromObj(instanceVarPtr, &objPtrCopy)
@@ -308,6 +311,7 @@ public final class GodotClassDB: @unchecked Sendable {
             instanceVariant.withUnsafeRawPointer { instPtr in
                 var args: [GDExtensionConstVariantPtr?] = [namePtr, instPtr]
                 var retVariant = GodotVariantBuffer()
+                defer { retVariant.destroy(using: gi) }
                 var error = GDExtensionCallError()
 
                 engineVariant.withUnsafeMutableRawPointer { engineVarPtr in
@@ -347,17 +351,24 @@ public final class GodotClassDB: @unchecked Sendable {
             }
 
             var objVariant = GodotVariantBuffer()
+            defer { objVariant.destroy(using: gi) }
             objVariant.withUnsafeMutableRawPointer { objVarPtr in
                 var copy = godotObj
                 variantFromObj(objVarPtr, &copy)
             }
 
             var signalNameVariant = GodotVariantBuffer()
+            defer { signalNameVariant.destroy(using: gi) }
             signalNameVariant.withUnsafeMutableRawPointer { sPtr in
                 GodotVariant.writeVariant(signalName, to: sPtr)
             }
 
             var argVariants = [GodotVariantBuffer](repeating: GodotVariantBuffer(), count: args.count)
+            defer {
+                for i in argVariants.indices {
+                    argVariants[i].destroy(using: gi)
+                }
+            }
             argVariants.withUnsafeMutableBufferPointer { argBuf in
                 for i in 0..<args.count {
                     let destPtr = UnsafeMutableRawPointer(argBuf.baseAddress!.advanced(by: i))
@@ -376,6 +387,7 @@ public final class GodotClassDB: @unchecked Sendable {
                     }
 
                     var retVariant = GodotVariantBuffer()
+                    defer { retVariant.destroy(using: gi) }
                     var error = GDExtensionCallError()
 
                     objVariant.withUnsafeMutableRawPointer { objVarPtr in

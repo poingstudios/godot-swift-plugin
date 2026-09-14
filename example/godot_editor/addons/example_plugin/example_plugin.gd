@@ -31,11 +31,11 @@ class _SignalDispatcher:
 	signal score_calculated(score: int, operation: String)
 
 static var _dispatcher := _SignalDispatcher.new()
-static var session_ended: Signal = _dispatcher.session_ended
-static var user_profile_updated: Signal = _dispatcher.user_profile_updated
-static var score_calculated: Signal = _dispatcher.score_calculated
+static var session_ended := _dispatcher.session_ended
+static var user_profile_updated := _dispatcher.user_profile_updated
+static var score_calculated := _dispatcher.score_calculated
 
-static var _plugin: Object = _get_plugin()
+static var _plugin := _get_plugin()
 
 
 static func _get_plugin() -> Object:
