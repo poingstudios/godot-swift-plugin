@@ -1,0 +1,24 @@
+name: "[CI] PR Validation"
+
+on:
+  pull_request:
+    branches:
+      - master
+      - main
+  push:
+    branches:
+      - master
+      - main
+
+jobs:
+  test:
+    name: "Test: Swift Package"
+    runs-on: macos-14
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Run Swift Unit Tests
+        run: swift test
