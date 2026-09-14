@@ -11,7 +11,7 @@ AI assistant context for the godot-swift-plugin repository. Read this before mak
 - **Supported Platforms:** iOS 14.0+, macOS 11.0+
 - **Primary Language:** Swift 5.9+ / Swift 6.0
 - **Packaging:** Swift Package Manager (SPM)
-- **Engine Support:** Godot 4.x
+- **Engine Support:** Godot 4.6+ (iOS GDExtension & arm64 Simulator baseline)
 
 ---
 
@@ -21,15 +21,23 @@ AI assistant context for the godot-swift-plugin repository. Read this before mak
 godot-swift-plugin/
 ├── Package.swift               # Root SPM package manifest
 ├── Sources/
+│   ├── CGDExtensionInterface/  # Pure C module exposing gdextension_interface.h
 │   └── GodotSwiftPlugin/       # Core framework source
 │       ├── GodotPlugin.swift   # Protocol & lifecycle
 │       ├── GodotPluginRegistry.swift # Method & signal registration/dispatch + case aliasing
+│       ├── GodotClassDB.swift  # Dynamic GDExtension ClassDB registration
+│       ├── GodotInterface.swift# Runtime GDExtension C interface loader
+│       ├── GodotRuntimeDispatcher.swift # Zero-boilerplate reflection dispatcher (@objcMembers)
 │       ├── GodotVariant.swift  # Type conversions & JSON serialization
-│       └── GodotSwiftBridge.swift # C-compatible ABI bridge (@_cdecl)
+│       ├── GodotString.swift   # Godot String GDExtension wrapper
+│       ├── GodotStringName.swift # Cached Godot StringName wrapper
+│       ├── GodotOS.swift       # OS focus hooks
+│       └── GodotSwiftBridge.swift # GDExtension entry point (@_cdecl)
 ├── Tests/
 │   └── GodotSwiftPluginTests/  # Framework unit tests
 ├── scripts/
-│   └── test_local.sh           # Test script
+│   ├── test_local.sh           # Test script
+│   └── sync_headers.sh         # Header sync script from godot-cpp
 └── README.md
 ```
 
