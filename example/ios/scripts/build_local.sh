@@ -32,13 +32,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BUILD_DIR="${PACKAGE_DIR}/build"
 DERIVED_DATA="${BUILD_DIR}/DerivedData"
-GODOT_BIN_DIR="$(cd "${PACKAGE_DIR}/../godot_editor/addons/example_plugin/bin" && pwd)"
+GODOT_BIN_DIR="${PACKAGE_DIR}/../godot_editor/addons/example_plugin/bin"
 
 TARGET="${1:-all}"
 
-echo -e "${CYAN}==> Target output directory: ${GODOT_BIN_DIR}${NC}"
 mkdir -p "${GODOT_BIN_DIR}"
 mkdir -p "${BUILD_DIR}"
+GODOT_BIN_DIR="$(cd "${GODOT_BIN_DIR}" && pwd)"
+
+echo -e "${CYAN}==> Target output directory: ${GODOT_BIN_DIR}${NC}"
 
 cd "${PACKAGE_DIR}"
 
