@@ -21,86 +21,90 @@
 // SOFTWARE.
 
 import Foundation
+@_exported import CGDExtensionInterface
 
-public typealias GodotSignalCallback = @convention(c) (
-    UnsafePointer<CChar>, // pluginName
-    UnsafePointer<CChar>, // signalName
-    UnsafePointer<CChar>  // jsonArgs
-) -> Void
+private var g_get_proc_address: GDExtensionInterfaceGetProcAddress?
+private var g_library: GDExtensionClassLibraryPtr?
 
-private var globalSignalCallback: GodotSignalCallback?
-
-/// Helper to allocate a C-string that Godot's C++ side can read.
-private func makeCString(_ string: String) -> UnsafePointer<CChar> {
-    return UnsafePointer(strdup(string))
-}
-
-@_cdecl("godot_swift_free_string")
-public func godot_swift_free_string(_ ptr: UnsafePointer<CChar>?) {
-    if let ptr {
-        free(UnsafeMutableRawPointer(mutating: ptr))
+/// Internal GDExtension lifecycle initialization callback.
+private func godot_swift_init_level(
+    _ userdata: UnsafeMutableRawPointer?,
+    _ level: GDExtensionInitializationLevel
+) {
+    guard level == GDEXTENSION_INITIALIZATION_SCENE,
+          let getProcAddress = g_get_proc_address else {
+        return
     }
+
+    GodotInterface.shared.load(getProcAddress: getProcAddress, library: g_library)
+    GodotPluginRegistry.shared.initializeAllPlugins()
 }
 
-@_cdecl("godot_swift_set_signal_callback")
-public func godot_swift_set_signal_callback(_ callback: GodotSignalCallback?) {
-    globalSignalCallback = callback
+/// Internal GDExtension lifecycle deinitialization callback.
+private func godot_swift_deinit_level(
+    _ userdata: UnsafeMutableRawPointer?,
+    _ level: GDExtensionInitializationLevel
+) {
+    guard level == GDEXTENSION_INITIALIZATION_SCENE else { return }
 
-    GodotPluginRegistry.shared.onSignalEmitted = { pluginName, signalName, args in
-        guard let callback = globalSignalCallback else { return }
+    GodotPluginRegistry.shared.deinitializeAllPlugins()
+    GodotClassDB.shared.reset()
+    GodotStringName.clearCache()
+    GodotString.clearCache()
+    GodotInterface.shared.reset()
+}
 
-        let jsonArgs = GodotVariant.encodeSignalArgs(args)
-        pluginName.withCString { cPlugin in
-            signalName.withCString { cSignal in
-                jsonArgs.withCString { cArgs in
-                    callback(cPlugin, cSignal, cArgs)
-                }
-            }
+/// Helper coordinating standard GDExtension entry points.
+public enum GodotBridge {
+    /// Initializes a GDExtension Swift plugin library.
+    public static func initializeExtension(
+        getProcAddress: GDExtensionInterfaceGetProcAddress?,
+        library: GDExtensionClassLibraryPtr?,
+        initialization: UnsafeMutablePointer<GDExtensionInitialization>?
+    ) -> GDExtensionBool {
+        guard let getProcAddress, let initialization else {
+            return 0
         }
+
+        g_get_proc_address = getProcAddress
+        g_library = library
+
+        initialization.pointee.initialize = godot_swift_init_level
+        initialization.pointee.deinitialize = godot_swift_deinit_level
+        initialization.pointee.userdata = nil
+        initialization.pointee.minimum_initialization_level = GDEXTENSION_INITIALIZATION_SCENE
+
+        return 1
+    }
+
+    /// Initializes a GDExtension Swift plugin library and registers a specific plugin type.
+    public static func initializeExtension<T: GodotPlugin>(
+        pluginType: T.Type,
+        factory: @escaping () -> T,
+        getProcAddress: GDExtensionInterfaceGetProcAddress?,
+        library: GDExtensionClassLibraryPtr?,
+        initialization: UnsafeMutablePointer<GDExtensionInitialization>?
+    ) -> GDExtensionBool {
+        GodotPluginRegistry.shared.registerPlugin(factory())
+        return initializeExtension(
+            getProcAddress: getProcAddress,
+            library: library,
+            initialization: initialization
+        )
     }
 }
 
-@_cdecl("godot_swift_get_plugin_count")
-public func godot_swift_get_plugin_count() -> Int32 {
-    return Int32(GodotPluginRegistry.shared.getPluginNames().count)
-}
+// MARK: - Standard GDExtension Entry Symbol
 
-@_cdecl("godot_swift_get_plugin_name")
-public func godot_swift_get_plugin_name(_ index: Int32) -> UnsafePointer<CChar>? {
-    let names = GodotPluginRegistry.shared.getPluginNames()
-    let idx = Int(index)
-    guard idx >= 0 && idx < names.count else { return nil }
-    return makeCString(names[idx])
-}
-
-@_cdecl("godot_swift_get_methods")
-public func godot_swift_get_methods(_ cPluginName: UnsafePointer<CChar>) -> UnsafePointer<CChar>? {
-    let pluginName = String(cString: cPluginName)
-    let methods = GodotPluginRegistry.shared.getMethods(for: pluginName)
-    let json = GodotVariant.encodeResult(methods)
-    return makeCString(json)
-}
-
-@_cdecl("godot_swift_get_signals")
-public func godot_swift_get_signals(_ cPluginName: UnsafePointer<CChar>) -> UnsafePointer<CChar>? {
-    let pluginName = String(cString: cPluginName)
-    let signals = GodotPluginRegistry.shared.getSignals(for: pluginName)
-    let json = GodotVariant.encodeResult(signals)
-    return makeCString(json)
-}
-
-@_cdecl("godot_swift_call_method")
-public func godot_swift_call_method(
-    _ cPluginName: UnsafePointer<CChar>,
-    _ cMethodName: UnsafePointer<CChar>,
-    _ cJsonArgs: UnsafePointer<CChar>
-) -> UnsafePointer<CChar>? {
-    let pluginName = String(cString: cPluginName)
-    let methodName = String(cString: cMethodName)
-    let jsonArgs = String(cString: cJsonArgs)
-
-    let args = GodotVariant.decodeArguments(jsonArgs)
-    let result = GodotPluginRegistry.shared.callMethod(pluginName: pluginName, methodName: methodName, args: args)
-    let encodedResult = GodotVariant.encodeResult(result)
-    return makeCString(encodedResult)
+@_cdecl("godot_swift_extension_init")
+public func godot_swift_extension_init(
+    _ p_get_proc_address: GDExtensionInterfaceGetProcAddress?,
+    _ p_library: GDExtensionClassLibraryPtr?,
+    _ r_initialization: UnsafeMutablePointer<GDExtensionInitialization>?
+) -> GDExtensionBool {
+    return GodotBridge.initializeExtension(
+        getProcAddress: p_get_proc_address,
+        library: p_library,
+        initialization: r_initialization
+    )
 }

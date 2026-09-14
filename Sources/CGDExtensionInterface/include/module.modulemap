@@ -1,0 +1,4 @@
+module CGDExtensionInterface [system] {
+    header "gdextension_interface.h"
+    export *
+}

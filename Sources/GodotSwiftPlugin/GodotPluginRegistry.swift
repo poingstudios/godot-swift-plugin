@@ -33,7 +33,7 @@ public final class GodotPluginRegistry: @unchecked Sendable {
     private var methods: [String: [String: MethodHandler]] = [:]
     private var signals: [String: Set<String>] = [:]
 
-    /// Global callback invoked whenever any plugin emits a signal.
+    /// Global callback invoked whenever any plugin emits a signal (for testing / listeners).
     public var onSignalEmitted: ((_ pluginName: String, _ signalName: String, _ args: [Any]) -> Void)?
 
     public init() {}
@@ -54,6 +54,11 @@ public final class GodotPluginRegistry: @unchecked Sendable {
 
         plugin.registerMethods(in: self)
         plugin.onInit()
+
+        // If the engine interface is already loaded, register in ClassDB immediately
+        if GodotInterface.shared.isInitialized {
+            GodotClassDB.shared.registerPlugin(plugin)
+        }
     }
 
     /// Registers a method for a specific plugin.
@@ -107,9 +112,82 @@ public final class GodotPluginRegistry: @unchecked Sendable {
         return nil
     }
 
-    /// Emits a signal from a plugin to listeners.
+    /// Emits a signal from a plugin to listeners and the Godot Engine.
     public func emitSignal(_ pluginName: String, signalName: String, args: [Any] = []) {
+        // Dispatch to Godot Engine ClassDB object
+        GodotClassDB.shared.emitSignal(pluginName: pluginName, signalName: signalName, args: args)
+
+        // Dispatch to testing / observer callback
         onSignalEmitted?(pluginName, signalName, args)
+    }
+
+    /// Automatically discovers and registers GodotPlugin subclasses present in the runtime.
+    public func discoverAndRegisterPlugins() {
+        lock.lock()
+        let hasPlugins = !plugins.isEmpty
+        lock.unlock()
+
+        if hasPlugins {
+            return
+        }
+
+        // 1. Check Info.plist for explicitly named plugin class
+        var explicitClasses: [String] = []
+        if let mainClassName = Bundle.main.object(forInfoDictionaryKey: "GodotPluginClass") as? String {
+            explicitClasses.append(mainClassName)
+        }
+        for bundle in Bundle.allFrameworks {
+            if let frameworkClassName = bundle.object(forInfoDictionaryKey: "GodotPluginClass") as? String {
+                explicitClasses.append(frameworkClassName)
+            }
+        }
+
+        for className in explicitClasses {
+            if let cls = NSClassFromString(className) as? GodotPlugin.Type {
+                let plugin = cls.init()
+                registerPlugin(plugin)
+            }
+        }
+
+        // 2. Discover all subclasses of GodotPlugin via Objective-C runtime
+        let discoveredTypes = GodotRuntimeDispatcher.discoverPluginClasses()
+        for pluginType in discoveredTypes {
+            let name = pluginType.pluginName
+            lock.lock()
+            let alreadyRegistered = plugins[name] != nil
+            lock.unlock()
+
+            if !alreadyRegistered {
+                let plugin = pluginType.init()
+                registerPlugin(plugin)
+            }
+        }
+    }
+
+    /// Initializes all registered plugins with Godot ClassDB.
+    public func initializeAllPlugins() {
+        discoverAndRegisterPlugins()
+
+        lock.lock()
+        let activePlugins = Array(plugins.values)
+        lock.unlock()
+
+        for plugin in activePlugins {
+            if !GodotClassDB.shared.isRegistered(plugin) {
+                GodotClassDB.shared.registerPlugin(plugin)
+            }
+        }
+    }
+
+    /// Deinitializes all registered plugins.
+    public func deinitializeAllPlugins() {
+        lock.lock()
+        let activePlugins = Array(plugins.values)
+        lock.unlock()
+
+        for plugin in activePlugins {
+            plugin.onDeinit()
+        }
     }
 
     /// Returns list of all registered plugin names.

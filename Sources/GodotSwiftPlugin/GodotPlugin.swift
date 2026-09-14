@@ -22,27 +22,64 @@
 
 import Foundation
 
-/// Base protocol for all native Godot iOS/Apple plugins written in Swift.
-public protocol GodotPlugin: AnyObject {
+/// Base class for all native Godot iOS/Apple plugins written in Swift.
+/// Inherit from this class and mark your subclass with `@objcMembers` or `@objc` on exposed methods.
+@objc(GodotPlugin)
+open class GodotPlugin: NSObject {
     /// The unique singleton name registered in Godot Engine (e.g., "ATT", "AdMob").
-    static var pluginName: String { get }
+    /// Defaults to the class name if not overridden.
+    @objc open class var pluginName: String {
+        return String(describing: self)
+    }
+
+    /// The native GDExtension ClassDB class name.
+    /// Defaults to the Swift class name, or "\(pluginName)Plugin" if equal to pluginName,
+    /// avoiding collisions with GDScript class_name (such as class_name ATT).
+    @objc open class var pluginClassName: String {
+        let swiftName = String(describing: self)
+        if swiftName == pluginName || swiftName == "GodotPlugin" {
+            return "\(pluginName)Plugin"
+        }
+        return swiftName
+    }
+
+    /// List of signal names exposed by this plugin to Godot Engine.
+    @objc open var pluginSignals: [String] {
+        return []
+    }
+
+    public required override init() {
+        super.init()
+    }
 
     /// Method registration hook called upon initialization.
-    func registerMethods(in registry: GodotPluginRegistry)
+    /// By default, automatically discovers all `@objc` methods on this class and registers them.
+    open func registerMethods(in registry: GodotPluginRegistry) {
+        let name = Self.pluginName
+
+        // 1. Auto-discover candidate @objc methods
+        let discovered = GodotRuntimeDispatcher.discoverMethods(for: self)
+        for (methodName, sel) in discovered {
+            registry.registerMethod(pluginName: name, methodName: methodName) { [weak self] args in
+                guard let self else { return nil }
+                return GodotRuntimeDispatcher.dynamicInvoke(target: self, selector: sel, args: args)
+            }
+        }
+
+        // 2. Auto-register declared signals
+        for signalName in pluginSignals {
+            registry.registerSignal(pluginName: name, signalName: signalName)
+        }
+    }
 
     /// Lifecycle hook called after the plugin is registered.
-    func onInit()
+    open func onInit() {}
 
     /// Lifecycle hook called when the plugin is deinitialized.
-    func onDeinit()
-}
-
-public extension GodotPlugin {
-    func onInit() {}
-    func onDeinit() {}
+    open func onDeinit() {}
 
     /// Helper to emit signals back to Godot through the shared registry.
-    func emitSignal(_ signalName: String, args: [Any] = []) {
+    public func emitSignal(_ signalName: String, args: [Any] = []) {
         GodotPluginRegistry.shared.emitSignal(Self.pluginName, signalName: signalName, args: args)
     }
 }
