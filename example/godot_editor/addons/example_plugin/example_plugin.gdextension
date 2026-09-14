@@ -1,0 +1,11 @@
+[configuration]
+entry_symbol = "godot_swift_extension_init"
+compatibility_minimum = "4.6"
+
+[libraries]
+macos.debug = "res://addons/example_plugin/bin/libGodotExamplePlugin.dylib"
+macos.release = "res://addons/example_plugin/bin/libGodotExamplePlugin.dylib"
+ios.debug = "res://addons/example_plugin/bin/GodotExamplePlugin.xcframework"
+ios.release = "res://addons/example_plugin/bin/GodotExamplePlugin.xcframework"
+ios.simulator.debug = "res://addons/example_plugin/bin/GodotExamplePlugin.xcframework"
+ios.simulator.release = "res://addons/example_plugin/bin/GodotExamplePlugin.xcframework"

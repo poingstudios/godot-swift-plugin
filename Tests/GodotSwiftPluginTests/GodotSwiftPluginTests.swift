@@ -64,7 +64,7 @@ private final class MockPlugin: GodotPlugin {
 @objcMembers
 private final class AutoReflectedPlugin: GodotPlugin {
     override class var pluginName: String { "AutoReflected" }
-    override var pluginSignals: [String] { ["data_received"] }
+    override var pluginSignals: [SignalInfo] { ["data_received"] }
 
     var counter: Int = 100
 
@@ -84,6 +84,32 @@ private final class AutoReflectedPlugin: GodotPlugin {
         return "Pong \(name)"
     }
 }
+
+private final class DeclarativePlugin: GodotPlugin {
+    override class var pluginName: String { "Declarative" }
+
+    @Signal
+    var user_authenticated
+
+    @Signal
+    var scoreUpdated
+
+    @Signal
+    var sessionEnded
+
+    @objc func authenticate(username: String) {
+        user_authenticated.emit(["username": username, "uid": 12345])
+    }
+
+    @objc func updateScore(player: String, score: Int) {
+        scoreUpdated.emit(player, score)
+    }
+
+    @objc func logout() {
+        sessionEnded.emit()
+    }
+}
+
 
 final class GodotSwiftPluginTests: XCTestCase {
     override func setUp() {
@@ -255,5 +281,41 @@ final class GodotSwiftPluginTests: XCTestCase {
             args: ["Godot"]
         ) as? String
         XCTAssertEqual(pong, "Pong Godot")
+    }
+
+    func testDeclarativeSignalPropertyWrapper() {
+        let plugin = DeclarativePlugin()
+        GodotPluginRegistry.shared.registerPlugin(plugin)
+
+        XCTAssertEqual(GodotPluginRegistry.shared.getPluginNames(), ["Declarative"])
+
+        let signals = GodotPluginRegistry.shared.getSignals(for: "Declarative")
+        XCTAssertTrue(signals.contains("user_authenticated"))
+        XCTAssertTrue(signals.contains("score_updated"))
+        XCTAssertTrue(signals.contains("session_ended"))
+
+        var receivedSignal: String?
+        var receivedArgs: [Any]?
+
+        GodotPluginRegistry.shared.onSignalEmitted = { _, sName, args in
+            receivedSignal = sName
+            receivedArgs = args
+        }
+
+        plugin.logout()
+        XCTAssertEqual(receivedSignal, "session_ended")
+        XCTAssertEqual(receivedArgs?.count, 0)
+
+        plugin.updateScore(player: "Alice", score: 99)
+        XCTAssertEqual(receivedSignal, "score_updated")
+        XCTAssertEqual(receivedArgs?.count, 2)
+        XCTAssertEqual(receivedArgs?[0] as? String, "Alice")
+        XCTAssertEqual(receivedArgs?[1] as? Int, 99)
+
+        plugin.authenticate(username: "Bob")
+        XCTAssertEqual(receivedSignal, "user_authenticated")
+        let dict = receivedArgs?[0] as? [String: Any]
+        XCTAssertEqual(dict?["username"] as? String, "Bob")
+        XCTAssertEqual(dict?["uid"] as? Int, 12345)
     }
 }

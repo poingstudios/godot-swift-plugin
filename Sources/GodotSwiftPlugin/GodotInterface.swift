@@ -49,6 +49,10 @@ public final class GodotInterface: @unchecked Sendable {
     public var variant_destroy: GDExtensionInterfaceVariantDestroy?
     public var variant_get_type: GDExtensionInterfaceVariantGetType?
     public var variant_call: GDExtensionInterfaceVariantCall?
+    public var variant_construct: GDExtensionInterfaceVariantConstruct?
+    public var variant_set_keyed: GDExtensionInterfaceVariantSetKeyed?
+    public var variant_get_keyed: GDExtensionInterfaceVariantGetKeyed?
+    public var variant_get_indexed: GDExtensionInterfaceVariantGetIndexed?
     public var variant_get_ptr_destructor: GDExtensionInterfaceVariantGetPtrDestructor?
     public var get_variant_from_type_constructor: GDExtensionInterfaceGetVariantFromTypeConstructor?
     public var get_variant_to_type_constructor: GDExtensionInterfaceGetVariantToTypeConstructor?
@@ -112,6 +116,10 @@ public final class GodotInterface: @unchecked Sendable {
         variant_destroy = resolve("variant_destroy", as: GDExtensionInterfaceVariantDestroy.self)
         variant_get_type = resolve("variant_get_type", as: GDExtensionInterfaceVariantGetType.self)
         variant_call = resolve("variant_call", as: GDExtensionInterfaceVariantCall.self)
+        variant_construct = resolve("variant_construct", as: GDExtensionInterfaceVariantConstruct.self)
+        variant_set_keyed = resolve("variant_set_keyed", as: GDExtensionInterfaceVariantSetKeyed.self)
+        variant_get_keyed = resolve("variant_get_keyed", as: GDExtensionInterfaceVariantGetKeyed.self)
+        variant_get_indexed = resolve("variant_get_indexed", as: GDExtensionInterfaceVariantGetIndexed.self)
         variant_get_ptr_destructor = resolve("variant_get_ptr_destructor", as: GDExtensionInterfaceVariantGetPtrDestructor.self)
         get_variant_from_type_constructor = resolve("get_variant_from_type_constructor", as: GDExtensionInterfaceGetVariantFromTypeConstructor.self)
         get_variant_to_type_constructor = resolve("get_variant_to_type_constructor", as: GDExtensionInterfaceGetVariantToTypeConstructor.self)
@@ -174,6 +182,10 @@ public final class GodotInterface: @unchecked Sendable {
         variant_destroy = nil
         variant_get_type = nil
         variant_call = nil
+        variant_construct = nil
+        variant_set_keyed = nil
+        variant_get_keyed = nil
+        variant_get_indexed = nil
         variant_get_ptr_destructor = nil
         get_variant_from_type_constructor = nil
         get_variant_to_type_constructor = nil

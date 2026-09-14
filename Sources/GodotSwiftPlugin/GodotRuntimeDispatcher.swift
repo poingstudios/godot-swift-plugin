@@ -174,35 +174,41 @@ public enum GodotRuntimeDispatcher {
         let numArgs = unsafeBitCast(numArgsImp, to: NumArgsFunc.self)(sig, numArgsSel)
         let getArgType = unsafeBitCast(argTypeImp, to: ArgTypeFunc.self)
 
+        var retainedObjects: [Unmanaged<AnyObject>] = []
+        defer {
+            for obj in retainedObjects {
+                obj.release()
+            }
+        }
+
         for i in 0..<(numArgs - 2) {
             guard i < args.count else { break }
             let argIndex = i + 2
             let typeEncoding = String(cString: getArgType(sig, argTypeSel, argIndex))
             let arg = args[i]
 
-            switch typeEncoding {
-            case "q", "l":
+            if typeEncoding.hasPrefix("q") || typeEncoding.hasPrefix("l") {
                 var val: Int64 = (arg as? Int64) ?? (arg as? Int).map(Int64.init) ?? 0
                 setArg(invocation, setArgSel, &val, argIndex)
-            case "i", "s":
+            } else if typeEncoding.hasPrefix("i") || typeEncoding.hasPrefix("s") {
                 var val: Int32 = (arg as? Int32) ?? (arg as? Int).map(Int32.init) ?? 0
                 setArg(invocation, setArgSel, &val, argIndex)
-            case "d":
+            } else if typeEncoding.hasPrefix("d") {
                 var val: Double = (arg as? Double) ?? (arg as? Float).map(Double.init) ?? 0.0
                 setArg(invocation, setArgSel, &val, argIndex)
-            case "f":
+            } else if typeEncoding.hasPrefix("f") {
                 var val: Float = (arg as? Float) ?? (arg as? Double).map(Float.init) ?? 0.0
                 setArg(invocation, setArgSel, &val, argIndex)
-            case "B", "c":
+            } else if typeEncoding.hasPrefix("B") || typeEncoding.hasPrefix("c") {
                 var val: Bool = (arg as? Bool) ?? false
                 setArg(invocation, setArgSel, &val, argIndex)
-            case "@":
-                var obj: AnyObject = arg as AnyObject
-                withUnsafePointer(to: &obj) { ptr in
+            } else if typeEncoding.hasPrefix("@") {
+                let unmanaged = Unmanaged.passRetained(arg as AnyObject)
+                retainedObjects.append(unmanaged)
+                var rawPtr = unmanaged.toOpaque()
+                withUnsafePointer(to: &rawPtr) { ptr in
                     setArg(invocation, setArgSel, ptr, argIndex)
                 }
-            default:
-                break
             }
         }
 

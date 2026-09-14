@@ -97,6 +97,73 @@ public enum GodotVariant {
             }
             return String(cString: cChars)
 
+        case GDEXTENSION_VARIANT_TYPE_DICTIONARY:
+            guard let variantCall = gi.variant_call,
+                  let getKeyed = gi.variant_get_keyed else { return [String: Any]() }
+            var keysVar = GodotVariantBuffer()
+            var err = GDExtensionCallError()
+            let keysMethod = GodotStringName.cached("keys")
+            keysVar.withUnsafeMutableRawPointer { kPtr in
+                keysMethod.withUnsafeRawPointer { mPtr in
+                    variantCall(UnsafeMutableRawPointer(mutating: variantPtr), mPtr, nil, 0, kPtr, &err)
+                }
+            }
+            guard let keysArray = keysVar.withUnsafeRawPointer({ toSwift($0) }) as? [Any] else {
+                return [String: Any]()
+            }
+            var dict: [String: Any] = [:]
+            for key in keysArray {
+                guard let keyStr = key as? String else { continue }
+                var keyVar = GodotVariantBuffer()
+                keyVar.withUnsafeMutableRawPointer { kp in
+                    writeVariant(keyStr, to: kp)
+                }
+                var valVar = GodotVariantBuffer()
+                var valid: UInt8 = 1
+                keyVar.withUnsafeRawPointer { kp in
+                    valVar.withUnsafeMutableRawPointer { vp in
+                        getKeyed(variantPtr, kp, vp, &valid)
+                    }
+                }
+                if valid != 0 {
+                    if let val = valVar.withUnsafeRawPointer({ toSwift($0) }) {
+                        dict[keyStr] = val
+                    }
+                }
+            }
+            return dict
+
+        case GDEXTENSION_VARIANT_TYPE_ARRAY:
+            guard let variantCall = gi.variant_call,
+                  let getIndexed = gi.variant_get_indexed else { return [Any]() }
+            var sizeVar = GodotVariantBuffer()
+            var err = GDExtensionCallError()
+            let sizeMethod = GodotStringName.cached("size")
+            sizeVar.withUnsafeMutableRawPointer { sPtr in
+                sizeMethod.withUnsafeRawPointer { mPtr in
+                    variantCall(UnsafeMutableRawPointer(mutating: variantPtr), mPtr, nil, 0, sPtr, &err)
+                }
+            }
+            let size = (sizeVar.withUnsafeRawPointer({ toSwift($0) }) as? Int) ?? 0
+            var array: [Any] = []
+            array.reserveCapacity(size)
+            for i in 0..<size {
+                var itemVar = GodotVariantBuffer()
+                var valid: UInt8 = 1
+                var oob: UInt8 = 0
+                itemVar.withUnsafeMutableRawPointer { ip in
+                    getIndexed(variantPtr, GDExtensionInt(i), ip, &valid, &oob)
+                }
+                if valid != 0 && oob == 0 {
+                    if let item = itemVar.withUnsafeRawPointer({ toSwift($0) }) {
+                        array.append(item)
+                    } else {
+                        array.append(NSNull())
+                    }
+                }
+            }
+            return array
+
         default:
             return nil
         }
@@ -173,9 +240,60 @@ public enum GodotVariant {
                 fromType(destPtr, ptr)
             }
 
+        case let dict as [String: Any]:
+            guard let variantConstruct = gi.variant_construct,
+                  let setKeyed = gi.variant_set_keyed else {
+                gi.variant_new_nil?(destPtr)
+                return
+            }
+            var err = GDExtensionCallError()
+            variantConstruct(GDEXTENSION_VARIANT_TYPE_DICTIONARY, destPtr, nil, 0, &err)
+            for (k, v) in dict {
+                var keyVar = GodotVariantBuffer()
+                var valVar = GodotVariantBuffer()
+                keyVar.withUnsafeMutableRawPointer { kPtr in
+                    writeVariant(k, to: kPtr)
+                }
+                valVar.withUnsafeMutableRawPointer { vPtr in
+                    writeVariant(v, to: vPtr)
+                }
+                keyVar.withUnsafeRawPointer { kPtr in
+                    valVar.withUnsafeRawPointer { vPtr in
+                        var valid: UInt8 = 1
+                        setKeyed(destPtr, kPtr, vPtr, &valid)
+                    }
+                }
+            }
+
+        case let arr as [Any]:
+            guard let variantConstruct = gi.variant_construct,
+                  let variantCall = gi.variant_call else {
+                gi.variant_new_nil?(destPtr)
+                return
+            }
+            var err = GDExtensionCallError()
+            variantConstruct(GDEXTENSION_VARIANT_TYPE_ARRAY, destPtr, nil, 0, &err)
+            let appendMethod = GodotStringName.cached("append")
+            for item in arr {
+                var itemVar = GodotVariantBuffer()
+                itemVar.withUnsafeMutableRawPointer { iPtr in
+                    writeVariant(item, to: iPtr)
+                }
+                itemVar.withUnsafeRawPointer { iPtr in
+                    var callArgs: [GDExtensionConstVariantPtr?] = [iPtr]
+                    var retVar = GodotVariantBuffer()
+                    retVar.withUnsafeMutableRawPointer { rPtr in
+                        appendMethod.withUnsafeRawPointer { mPtr in
+                            variantCall(destPtr, mPtr, &callArgs, 1, rPtr, &err)
+                        }
+                    }
+                }
+            }
+
         default:
             gi.variant_new_nil?(destPtr)
         }
+
     }
 
     // MARK: - Legacy / Test Harness JSON Marshaling

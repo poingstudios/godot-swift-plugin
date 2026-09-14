@@ -1,0 +1,48 @@
+name: GodotSwiftPlugin
+options:
+  bundleIdPrefix: com.poingstudios
+  minimumXcodeGenVersion: 2.34.0
+
+targets:
+  CGDExtensionInterface:
+    type: library.static
+    platform: iOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources/CGDExtensionInterface
+        headerVisibility: public
+    settings:
+      base:
+        PRODUCT_NAME: CGDExtensionInterface
+        PUBLIC_HEADERS_FOLDER_PATH: include
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+
+  GodotSwiftPlugin:
+    type: library.static
+    platform: iOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources/GodotSwiftPlugin
+    dependencies:
+      - target: CGDExtensionInterface
+    settings:
+      base:
+        PRODUCT_NAME: GodotSwiftPlugin
+        PRODUCT_MODULE_NAME: GodotSwiftPlugin
+        SWIFT_VERSION: "5.9"
+        BUILD_LIBRARY_FOR_DISTRIBUTION: YES
+        SKIP_INSTALL: YES
+
+  GodotSwiftPluginTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Tests/GodotSwiftPluginTests
+    dependencies:
+      - target: GodotSwiftPlugin
+    settings:
+      base:
+        PRODUCT_NAME: GodotSwiftPluginTests
+        SWIFT_VERSION: "5.9"

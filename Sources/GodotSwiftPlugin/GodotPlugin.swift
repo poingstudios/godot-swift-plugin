@@ -22,6 +22,27 @@
 
 import Foundation
 
+/// Represents signal metadata mirroring Android's `org.godotengine.godot.plugin.SignalInfo`.
+public struct SignalInfo: ExpressibleByStringLiteral, Sendable {
+    public let name: String
+    public let paramTypes: [Any.Type]
+
+    public init(_ name: String, _ paramTypes: Any.Type...) {
+        self.name = name
+        self.paramTypes = paramTypes
+    }
+
+    public init(_ name: String, paramTypes: [Any.Type]) {
+        self.name = name
+        self.paramTypes = paramTypes
+    }
+
+    public init(stringLiteral value: String) {
+        self.name = value
+        self.paramTypes = []
+    }
+}
+
 /// Base class for all native Godot iOS/Apple plugins written in Swift.
 /// Inherit from this class and mark your subclass with `@objcMembers` or `@objc` on exposed methods.
 @objc(GodotPlugin)
@@ -30,6 +51,11 @@ open class GodotPlugin: NSObject {
     /// Defaults to the class name if not overridden.
     @objc open class var pluginName: String {
         return String(describing: self)
+    }
+
+    /// Mirrors Android's `getPluginName()` for exact multi-platform API parity.
+    open func getPluginName() -> String {
+        return Self.pluginName
     }
 
     /// The native GDExtension ClassDB class name.
@@ -43,9 +69,14 @@ open class GodotPlugin: NSObject {
         return swiftName
     }
 
-    /// List of signal names exposed by this plugin to Godot Engine.
-    @objc open var pluginSignals: [String] {
+    /// Mirrors Android's `getPluginSignals()` for exact multi-platform API parity.
+    open func getPluginSignals() -> [SignalInfo] {
         return []
+    }
+
+    /// List of signals exposed by this plugin to Godot Engine.
+    open var pluginSignals: [SignalInfo] {
+        return getPluginSignals()
     }
 
     public required override init() {
@@ -66,9 +97,23 @@ open class GodotPlugin: NSObject {
             }
         }
 
-        // 2. Auto-register declared signals
-        for signalName in pluginSignals {
-            registry.registerSignal(pluginName: name, signalName: signalName)
+        // 2. Auto-register declared @Signal property wrappers via reflection
+        var currentMirror: Mirror? = Mirror(reflecting: self)
+        while let mirror = currentMirror {
+            for child in mirror.children {
+                if let sig = child.value as? AnyGodotSignal {
+                    let propName = (child.label?.hasPrefix("_") == true) ? String(child.label!.dropFirst()) : (child.label ?? "")
+                    sig.bind(to: self, propertyName: propName)
+                    registry.registerSignal(pluginName: name, signalName: sig.signalName)
+                }
+            }
+            if mirror.subjectType == GodotPlugin.self { break }
+            currentMirror = mirror.superclassMirror
+        }
+
+        // 3. Register declared pluginSignals (mirrors Android getPluginSignals)
+        for signal in pluginSignals {
+            registry.registerSignal(pluginName: name, signalName: signal.name)
         }
     }
 
@@ -78,7 +123,12 @@ open class GodotPlugin: NSObject {
     /// Lifecycle hook called when the plugin is deinitialized.
     open func onDeinit() {}
 
-    /// Helper to emit signals back to Godot through the shared registry.
+    /// Helper to emit signals back to Godot with variadic arguments (mirrors Android's emitSignal).
+    public func emitSignal(_ signalName: String, _ args: Any...) {
+        GodotPluginRegistry.shared.emitSignal(Self.pluginName, signalName: signalName, args: args)
+    }
+
+    /// Helper to emit signals back to Godot with an explicit argument array.
     public func emitSignal(_ signalName: String, args: [Any] = []) {
         GodotPluginRegistry.shared.emitSignal(Self.pluginName, signalName: signalName, args: args)
     }
