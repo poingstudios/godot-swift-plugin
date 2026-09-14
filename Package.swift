@@ -18,10 +18,14 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "CGDExtensionInterface",
+            path: "Sources/CGDExtensionInterface",
+            publicHeadersPath: "include"
+        ),
+        .target(
             name: "GodotSwiftPlugin",
-            dependencies: [],
-            path: "Sources/GodotSwiftPlugin",
-            exclude: ["Bridge"]
+            dependencies: ["CGDExtensionInterface"],
+            path: "Sources/GodotSwiftPlugin"
         ),
         .testTarget(
             name: "GodotSwiftPluginTests",

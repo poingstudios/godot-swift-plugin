@@ -21,19 +21,20 @@
 // SOFTWARE.
 
 import XCTest
+import CGDExtensionInterface
 @testable import GodotSwiftPlugin
 
 private final class MockPlugin: GodotPlugin {
-    static let pluginName = "MockPlugin"
+    override class var pluginName: String { "MockPlugin" }
 
     var lastStatus: Int = 0
     var initialized = false
 
-    func onInit() {
+    override func onInit() {
         initialized = true
     }
 
-    func registerMethods(in registry: GodotPluginRegistry) {
+    override func registerMethods(in registry: GodotPluginRegistry) {
         // Registered with idiomatic Swift camelCase:
         registry.registerMethod(pluginName: Self.pluginName, methodName: "getStatus") { [weak self] _ in
             return self?.lastStatus ?? 0
@@ -60,10 +61,35 @@ private final class MockPlugin: GodotPlugin {
     }
 }
 
+@objcMembers
+private final class AutoReflectedPlugin: GodotPlugin {
+    override class var pluginName: String { "AutoReflected" }
+    override var pluginSignals: [String] { ["data_received"] }
+
+    var counter: Int = 100
+
+    func get_counter() -> Int {
+        return counter
+    }
+
+    func increment(_ amount: Int) {
+        counter += amount
+    }
+
+    func calculate_total(_ a: Int, _ b: Int) -> Int {
+        return a + b
+    }
+
+    func ping(name: String) -> String {
+        return "Pong \(name)"
+    }
+}
+
 final class GodotSwiftPluginTests: XCTestCase {
     override func setUp() {
         super.setUp()
         GodotPluginRegistry.shared.reset()
+        GodotStringName.clearCache()
     }
 
     func testPluginRegistrationAndLifecycle() {
@@ -116,30 +142,45 @@ final class GodotSwiftPluginTests: XCTestCase {
         XCTAssertEqual(receivedArgs?.first as? Int, 3)
     }
 
-    func testCBridgeFunctions() {
-        let plugin = MockPlugin()
-        GodotPluginRegistry.shared.registerPlugin(plugin)
+    func testGDExtensionInitializationEntryPoint() {
+        var initialization = GDExtensionInitialization()
 
-        XCTAssertEqual(godot_swift_get_plugin_count(), 1)
-
-        if let cName = godot_swift_get_plugin_name(0) {
-            XCTAssertEqual(String(cString: cName), "MockPlugin")
-            godot_swift_free_string(cName)
-        } else {
-            XCTFail("Missing plugin name")
+        let dummyGetProcAddress: GDExtensionInterfaceGetProcAddress = { name in
+            return nil
         }
 
-        let cPluginName = ("MockPlugin" as NSString).utf8String!
-        let cMethodName = ("add_numbers" as NSString).utf8String!
-        let cArgs = ("[15, 27]" as NSString).utf8String!
-
-        if let resultPtr = godot_swift_call_method(cPluginName, cMethodName, cArgs) {
-            let resultStr = String(cString: resultPtr)
-            XCTAssertEqual(resultStr, "42")
-            godot_swift_free_string(resultPtr)
-        } else {
-            XCTFail("Method call returned nil")
+        let result = withUnsafeMutablePointer(to: &initialization) { initPtr in
+            godot_swift_extension_init(dummyGetProcAddress, nil, initPtr)
         }
+
+        XCTAssertEqual(result, 1)
+        XCTAssertNotNil(initialization.initialize)
+        XCTAssertNotNil(initialization.deinitialize)
+        XCTAssertEqual(initialization.minimum_initialization_level, GDEXTENSION_INITIALIZATION_SCENE)
+    }
+
+    func testGodotStringNameCaching() {
+        let sn1 = GodotStringName.cached("test_string")
+        let sn2 = GodotStringName.cached("test_string")
+
+        XCTAssertTrue(sn1 === sn2)
+        XCTAssertEqual(sn1.stringValue, "test_string")
+
+        GodotStringName.clearCache()
+        let sn3 = GodotStringName.cached("test_string")
+        XCTAssertFalse(sn1 === sn3)
+    }
+
+    func testGodotVariantJsonHelpers() {
+        let argsJson = "[10, \"hello\", true]"
+        let decoded = GodotVariant.decodeArguments(argsJson)
+        XCTAssertEqual(decoded.count, 3)
+        XCTAssertEqual(decoded[0] as? Int, 10)
+        XCTAssertEqual(decoded[1] as? String, "hello")
+        XCTAssertEqual(decoded[2] as? Bool, true)
+
+        let encoded = GodotVariant.encodeResult(42)
+        XCTAssertEqual(encoded, "42")
     }
 
     func testGodotOSFocusHooks() {
@@ -161,5 +202,58 @@ final class GodotSwiftPluginTests: XCTestCase {
 
         GodotOS.customFocusOutHandler = nil
         GodotOS.customFocusInHandler = nil
+    }
+
+    func testAutoReflectedPlugin() {
+        let plugin = AutoReflectedPlugin()
+        GodotPluginRegistry.shared.registerPlugin(plugin)
+
+        XCTAssertEqual(GodotPluginRegistry.shared.getPluginNames(), ["AutoReflected"])
+
+        let methods = GodotPluginRegistry.shared.getMethods(for: "AutoReflected")
+        XCTAssertTrue(methods.contains("get_counter"))
+        XCTAssertTrue(methods.contains("getCounter"))
+        XCTAssertTrue(methods.contains("increment"))
+        XCTAssertTrue(methods.contains("calculate_total"))
+        XCTAssertTrue(methods.contains("calculateTotal"))
+        XCTAssertTrue(methods.contains("ping"))
+
+        let signals = GodotPluginRegistry.shared.getSignals(for: "AutoReflected")
+        XCTAssertTrue(signals.contains("data_received"))
+
+        // Test calling getter
+        let counterVal = GodotPluginRegistry.shared.callMethod(
+            pluginName: "AutoReflected",
+            methodName: "get_counter"
+        ) as? Int
+        XCTAssertEqual(counterVal, 100)
+
+        // Test calling method with 1 argument
+        _ = GodotPluginRegistry.shared.callMethod(
+            pluginName: "AutoReflected",
+            methodName: "increment",
+            args: [25]
+        )
+        let updatedCounter = GodotPluginRegistry.shared.callMethod(
+            pluginName: "AutoReflected",
+            methodName: "getCounter"
+        ) as? Int
+        XCTAssertEqual(updatedCounter, 125)
+
+        // Test calling method with 2 arguments
+        let sum = GodotPluginRegistry.shared.callMethod(
+            pluginName: "AutoReflected",
+            methodName: "calculate_total",
+            args: [15, 35]
+        ) as? Int
+        XCTAssertEqual(sum, 50)
+
+        // Test string argument & return
+        let pong = GodotPluginRegistry.shared.callMethod(
+            pluginName: "AutoReflected",
+            methodName: "ping",
+            args: ["Godot"]
+        ) as? String
+        XCTAssertEqual(pong, "Pong Godot")
     }
 }
