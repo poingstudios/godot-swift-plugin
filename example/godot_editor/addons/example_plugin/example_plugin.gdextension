@@ -1,6 +1,7 @@
 [configuration]
 entry_symbol = "godot_swift_extension_init"
 compatibility_minimum = "4.6"
+include_tags = ["ios", "macos"]
 
 [libraries]
 macos.debug = "res://addons/example_plugin/bin/libGodotExamplePlugin.dylib"
@@ -9,3 +10,17 @@ ios.debug = "res://addons/example_plugin/bin/GodotExamplePlugin.xcframework"
 ios.release = "res://addons/example_plugin/bin/GodotExamplePlugin.xcframework"
 ios.simulator.debug = "res://addons/example_plugin/bin/GodotExamplePlugin.xcframework"
 ios.simulator.release = "res://addons/example_plugin/bin/GodotExamplePlugin.xcframework"
+windows.debug.x86_64 = "res://addons/example_plugin/bin/stubs/stub_windows_x86_64.dll"
+windows.release.x86_64 = "res://addons/example_plugin/bin/stubs/stub_windows_x86_64.dll"
+windows.debug.arm64 = "res://addons/example_plugin/bin/stubs/stub_windows_arm64.dll"
+windows.release.arm64 = "res://addons/example_plugin/bin/stubs/stub_windows_arm64.dll"
+
+linux.debug.x86_64 = "res://addons/example_plugin/bin/stubs/libstub_linux_x86_64.so"
+linux.release.x86_64 = "res://addons/example_plugin/bin/stubs/libstub_linux_x86_64.so"
+linux.debug.arm64 = "res://addons/example_plugin/bin/stubs/libstub_linux_arm64.so"
+linux.release.arm64 = "res://addons/example_plugin/bin/stubs/libstub_linux_arm64.so"
+
+android.debug.arm64 = "res://addons/example_plugin/bin/stubs/libstub_android_arm64.so"
+android.release.arm64 = "res://addons/example_plugin/bin/stubs/libstub_android_arm64.so"
+android.debug.x86_64 = "res://addons/example_plugin/bin/stubs/libstub_android_x86_64.so"
+android.release.x86_64 = "res://addons/example_plugin/bin/stubs/libstub_android_x86_64.so"

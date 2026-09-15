@@ -35,10 +35,59 @@ godot-swift-plugin/
 │       └── GodotSwiftBridge.swift # GDExtension entry point (@_cdecl)
 ├── Tests/
 │   └── GodotSwiftPluginTests/  # Framework unit tests
+├── templates/
+│       ├── libstub_macos.dylib # Universal arm64 + x86_64
+│       ├── stub_windows.dll    # Windows x86_64
+│       ├── libstub_linux.so    # Linux x86_64
+│       ├── libstub_android.so  # Android arm64
+│       └── stub_ios.xcframework # Static arm64 + universal simulator
 ├── scripts/
+│   ├── build_plugin.sh         # Universal plugin builder (macOS dylib & iOS XCFramework)
+│   ├── create_plugin.sh        # Plugin scaffolding generator (creates new plugin template)
+│   ├── generate_stubs.sh       # Multi-platform GDExtension stub compiler
 │   ├── test_local.sh           # Test script
 │   └── sync_headers.sh         # Header sync script from godot-cpp
 └── README.md
+```
+
+---
+
+## Build & Scaffolding Commands
+
+### Scaffold a New Plugin
+Interactive wizard:
+```bash
+./scripts/create_plugin.sh
+```
+Non-interactive CLI:
+```bash
+./scripts/create_plugin.sh --name MyPlugin --output-dir /path/to/MyPlugin
+```
+
+### Build Example Plugin
+Via root script:
+```bash
+./scripts/build_local.sh all
+```
+Or via native SPM Command Plugin:
+```bash
+cd example/ios && swift package --disable-sandbox --allow-writing-to-package-directory godot-build all
+```
+
+### Run Example in Godot
+```bash
+./scripts/run_example.sh
+```
+
+### Build Any Plugin (Universal Builder)
+```bash
+./scripts/build_plugin.sh --package-dir <path_to_package> --target all
+```
+
+### Run Unit Tests
+```bash
+swift test
+swift test --package-path example/ios
 ```
 
 ---

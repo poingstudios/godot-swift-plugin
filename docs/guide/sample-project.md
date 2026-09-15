@@ -15,10 +15,8 @@ example/
 │   ├── Package.swift     # Depends on local ../../ (GodotSwiftPlugin)
 │   ├── Sources/
 │   │   └── GodotExamplePlugin/
-│   ├── Tests/            # Swift unit tests (including mock service injection)
-│   └── scripts/
-│       └── build_local.sh
-└── godot_editor/         # Godot 4.7.2 testbed project
+│   └── Tests/            # Swift unit tests (mock service injection)
+└── godot_editor/         # Godot testbed project
     ├── project.godot
     ├── addons/example_plugin/
     └── sample/
@@ -28,14 +26,25 @@ example/
 
 ## Running the Sample
 
-### 1. Build the Native macOS Dylib
+### 1. Build the Native Binaries
+
 ```bash
-./example/ios/scripts/build_local.sh
+./scripts/build_local.sh all
 ```
 
-### 2. Run in Godot
-Open `example/godot_editor/project.godot` in Godot 4.6+, or run headless:
-
+Or using native Swift Package Manager inside `example/ios`:
 ```bash
-godot --path example/godot_editor --headless --quit-after 5
+cd example/ios && swift package --disable-sandbox --allow-writing-to-package-directory godot-build all
+```
+
+### 2. Run in Godot Editor
+
+Interactive:
+```bash
+./scripts/run_example.sh
+```
+
+Headless automated test:
+```bash
+./scripts/run_example.sh --headless --quit-after 1
 ```
