@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # MIT License
 #
 # Copyright (c) 2026-present Poing Studios
@@ -20,30 +21,27 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-extends EditorExportPlugin
+set -euo pipefail
 
-const PLUGIN_NAME := "Example"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PROJECT_DIR="${ROOT_DIR}/example/godot_editor"
 
+GODOT_BIN="${GODOT_BIN:-}"
+if [ -z "${GODOT_BIN}" ]; then
+    if command -v godot &>/dev/null; then
+        GODOT_BIN="godot"
+    elif [ -f "/Applications/Godot.app/Contents/MacOS/Godot" ]; then
+        GODOT_BIN="/Applications/Godot.app/Contents/MacOS/Godot"
+    elif [ -f "/Applications/Godot_mono.app/Contents/MacOS/Godot" ]; then
+        GODOT_BIN="/Applications/Godot_mono.app/Contents/MacOS/Godot"
+    elif [ -f "${HOME}/Applications/Godot.app/Contents/MacOS/Godot" ]; then
+        GODOT_BIN="${HOME}/Applications/Godot.app/Contents/MacOS/Godot"
+    else
+        echo "Error: Godot executable not found. Please set GODOT_BIN environment variable or install Godot to /Applications." >&2
+        exit 1
+    fi
+fi
 
-func _get_name() -> String:
-	return PLUGIN_NAME
-
-
-func _supports_platform(platform: EditorExportPlatform) -> bool:
-	return platform is EditorExportPlatformIOS
-
-
-func _export_begin(
-	features: PackedStringArray,
-	_is_debug: bool,
-	_path: String,
-	_flags: int
-) -> void:
-	if not features.has("ios"):
-		return
-
-	_add_linker_flags("-ObjC")
-
-
-func _add_linker_flags(flags: String) -> void:
-	add_apple_embedded_platform_linker_flags(flags)
+echo "==> Launching Godot with sample project (${PROJECT_DIR})..."
+exec "${GODOT_BIN}" --path "${PROJECT_DIR}" "$@"

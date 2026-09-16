@@ -1,36 +1,117 @@
 # Godot Swift Plugin
 
-Lightweight, official-grade toolkit for developing native Godot iOS/Apple plugins using pure Swift.
+Lightweight toolkit for developing native Godot iOS/Apple plugins using pure Swift.
 
 ## Overview
 
-`godot-swift-plugin` is the iOS counterpart to Android's `GodotPlugin` architecture. It enables developers to write native Apple plugins (StoreKit, AdMob, Game Center, Apple Sign-In) in pure Swift with zero engine bloat and fast compile times.
+`godot-swift-plugin` is the iOS counterpart to Android's `GodotPlugin` architecture. It enables developers to write native Apple plugins (StoreKit, Game Center, Apple Sign-In, etc.) in pure Swift with zero engine bloat and fast compile times.
 
-## Features
+---
 
-- **Pure Swift**: Write modern Swift code with standard closures, delegates, and `async/await`.
-- **Fast Builds**: Compiles in ~2 seconds (no monolithic engine wrappers).
-- **Pure GDExtension ABI**: Direct `@_cdecl` interop with Godot's C interface without C++ bridge wrappers.
-- **SPM First**: Distributed as a standard Swift Package via Swift Package Manager.
-- **Engine Support**: Godot 4.6+ (requires Godot 4.6+ for modern Apple embedded GDExtension architecture and native arm64 iOS simulator support).
+## Quickstart
 
-## GDExtension Configuration & Desktop Behavior
+### 1. Create a Plugin
 
-When distributing iOS-only plugins, configure `include_tags = ["ios"]` in your `.gdextension` file:
+#### Option A: 1-Line Wizard via `curl` (Recommended)
+Generates the complete hybrid project (Swift package + Godot addon + stubs + sample scene):
 
-```ini
-[configuration]
-entry_symbol = "your_entry_symbol"
-compatibility_minimum = "4.6"
-include_tags = ["ios"]
-
-[libraries]
-ios.debug = "res://addons/my_plugin/ios/bin/MyPlugin.xcframework"
-ios.release = "res://addons/my_plugin/ios/bin/MyPlugin.xcframework"
+```bash
+curl -fsSL https://raw.githubusercontent.com/poingstudios/godot-swift-plugin/master/scripts/create_plugin.sh | bash
 ```
 
-- **Godot 4.8+**: The engine reads `include_tags` ([godotengine/godot#121575](https://github.com/godotengine/godot/pull/121575)) and silently skips loading the plugin when running the editor on desktop dev machines (macOS, Windows, Linux) without requiring desktop stub binaries.
-- **Godot 4.3 – 4.7**: The engine does not evaluate `include_tags` and prints an insuppressible notice on launch (`No GDExtension library found for current OS and architecture`, see [godotengine/godot#105615](https://github.com/godotengine/godot/issues/105615)). This is non-fatal: game code continues to run via GDScript fallback mocks, and iOS exports function normally.
+*(Or from a local clone: `./scripts/create_plugin.sh`)*
+
+#### Option B: Pure Swift CLI (`swift package init`)
+Initialize directly using Swift Package Manager CLI:
+
+```bash
+# 1. Create bare Swift library:
+mkdir MyPlugin && cd MyPlugin
+swift package init --name MyPlugin --type library
+
+# 2. Automatically attach GodotSwiftPlugin & the godot-build command:
+swift package add-dependency https://github.com/poingstudios/godot-swift-plugin --branch master
+swift package add-target-dependency GodotSwiftPlugin MyPlugin --package godot-swift-plugin
+```
+
+---
+
+### 2. Write in Pure Swift
+
+Subclass `GodotPlugin`. Methods marked `@objc` are automatically registered in Godot, and `@Signal` exposes signals:
+
+```swift
+import Foundation
+import GodotSwiftPlugin
+
+public final class MyPlugin: GodotPlugin {
+    public override class var pluginName: String { "MyPlugin" }
+
+    @Signal
+    public var scoreUpdated
+
+    @objc public func greet(name: String) -> String {
+        return "Hello, \(name)!"
+    }
+
+    @objc public func addScore(points: Int) -> Int {
+        scoreUpdated.emit(points)
+        return points
+    }
+}
+```
+
+### 3. Call from GDScript
+
+Access your plugin via `Engine.get_singleton()`:
+
+```gdscript
+func _ready() -> void:
+	if Engine.has_singleton("MyPlugin"):
+		var plugin := Engine.get_singleton("MyPlugin")
+		plugin.score_updated.connect(func(score): print("Score:", score))
+		print(plugin.greet("Godot"))
+		plugin.add_score(100)
+```
+
+### 4. Build Binaries
+
+```bash
+./scripts/build_local.sh all
+```
+
+Or directly using Swift Package Manager's native command plugin:
+
+```bash
+swift package --disable-sandbox --allow-writing-to-package-directory godot-build all
+```
+
+Target options: `all` (macOS dylib + iOS XCFramework), `macos`, or `ios`.
+
+---
+
+## Precompiled Stubs
+
+All generated plugins include lightweight precompiled GDExtension stubs in `addons/<plugin>/bin/stubs/` (macOS, Windows, Linux, Android, and iOS), silencing Godot's `No GDExtension library found` notice when running the editor on any desktop OS.
+
+To recompile stubs locally:
+
+```bash
+./scripts/generate_stubs.sh
+```
+
+---
+
+## Documentation
+
+Comprehensive guides are available in the [documentation](docs/guide/):
+- [Getting Started](docs/guide/getting-started.md)
+- [Architecture & Lifecycle](docs/guide/architecture.md)
+- [Methods & Type Marshalling](docs/guide/methods.md)
+- [Signals & Events](docs/guide/signals.md)
+- [Android Parity Guide](docs/guide/android-parity.md)
+
+---
 
 ## License
 

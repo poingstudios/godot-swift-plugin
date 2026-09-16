@@ -19,13 +19,16 @@ Package.resolved
 *.xcworkspace
 *.xcodeproj
 *.xcarchive
+*.xcframework/
 xcuserdata/
 DerivedData/
 *.hmap
 *.LinkFileList
 
 build/
-bin/
+bin/*
+!**/stubs/
+!**/stubs/**
 *.a
 !Sources/**/lib/*.a
 *.o
@@ -34,6 +37,8 @@ bin/
 *.dylib
 *.so
 *.dll
+*.xcframework/
+!**/stubs/**
 
 # OS specific ignores
 .DS_Store

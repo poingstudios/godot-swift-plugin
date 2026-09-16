@@ -20,6 +20,40 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// Provide an exported symbol so static library archivers do not warn about empty object files.
-extern int godot_cgdextension_interface_anchor;
-int godot_cgdextension_interface_anchor = 0;
+/**
+ * Minimal GDExtension stub functions for unsupported platforms.
+ * These do nothing but satisfy Godot's requirement for a valid entry point,
+ * silencing "No GDExtension library found for current OS and architecture" errors.
+ */
+
+#ifdef _WIN32
+#define STUB_EXPORT __declspec(dllexport)
+#else
+#define STUB_EXPORT __attribute__((visibility("default")))
+#endif
+
+void stub_dummy_func(void *userdata, int level) {}
+
+typedef struct {
+    int minimum_initialization_level;
+    void *userdata;
+    void (*initialize)(void *userdata, int p_level);
+    void (*deinitialize)(void *userdata, int p_level);
+} GDExtensionInitialization;
+
+/**
+ * GDExtension Entry Point
+ * Returns 1 (success) and sets dummy initialization callbacks.
+ */
+STUB_EXPORT unsigned char godot_swift_extension_init(
+    void *p_get_proc_address,
+    void *p_library,
+    GDExtensionInitialization *r_initialization
+) {
+    if (r_initialization) {
+        r_initialization->initialize = stub_dummy_func;
+        r_initialization->deinitialize = stub_dummy_func;
+        r_initialization->minimum_initialization_level = 0;
+    }
+    return 1;
+}

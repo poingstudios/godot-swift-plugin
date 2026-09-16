@@ -1,8 +1,55 @@
 # Quickstart
 
-Get up and running with your first Swift plugin in minutes.
+Get up and running with your first Swift plugin in seconds.
 
-## 1. Package Configuration
+## Option A: 1-Line Wizard via `curl` (Recommended)
+
+Generate a complete, fully compilable Godot iOS & macOS plugin project with a single command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/poingstudios/godot-swift-plugin/master/scripts/create_plugin.sh | bash
+```
+
+*(Or from a local clone: `./scripts/create_plugin.sh --name GodotGameCenter`)*
+
+This creates:
+- **`platforms/apple/`**: Swift package configured with `GodotSwiftPlugin`, starter Swift class, and unit tests.
+- **`platforms/godot_editor/addons/<name>/`**: Complete addon layout with `.gdextension`, `plugin.cfg`, `plugin.gd`, singleton wrapper, and `bin/stubs/` precompiled stubs.
+- **`scripts/build_local.sh`**: Central build script detecting host architecture and building binaries.
+- **`sample/`**: Interactive Godot sample scene.
+
+To compile immediately:
+```bash
+cd GodotGameCenter
+./scripts/build_local.sh all
+```
+
+---
+
+## Option B: Pure Swift CLI (`swift package init`)
+
+If you prefer setting up manually from scratch:
+
+```bash
+# 1. Create a bare Swift package:
+mkdir MyPlugin && cd MyPlugin
+swift package init --name MyPlugin --type library
+
+# 2. Attach GodotSwiftPlugin dependency & the build command:
+swift package add-dependency https://github.com/poingstudios/godot-swift-plugin --branch master
+swift package add-target-dependency GodotSwiftPlugin MyPlugin --package godot-swift-plugin
+
+# 3. Build using the native SPM command plugin:
+swift package --disable-sandbox --allow-writing-to-package-directory godot-build all
+```
+
+---
+
+## Manual Setup
+
+If you prefer to configure your plugin manually:
+
+### 1. Package Configuration
 
 Create a standard Swift package for your iOS plugin. In your `Package.swift`, depend on `GodotSwiftPlugin`:
 
@@ -24,7 +71,7 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(url: "https://github.com/Poing-Studios/godot-swift-plugin", branch: "master")
+        .package(url: "https://github.com/poingstudios/godot-swift-plugin", branch: "master")
     ],
     targets: [
         .target(
