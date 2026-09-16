@@ -32,6 +32,7 @@ struct GodotBuildPlugin: CommandPlugin {
 
         var target = "all"
         var config = "Release"
+        var outputDir: String?
         var clean = false
         var passthroughArgs: [String] = []
 
@@ -50,6 +51,12 @@ struct GodotBuildPlugin: CommandPlugin {
                     i += 2
                     continue
                 }
+            } else if arg == "-o" || arg == "--output-dir" {
+                if i + 1 < arguments.count {
+                    outputDir = arguments[i + 1]
+                    i += 2
+                    continue
+                }
             } else if arg == "--clean" {
                 clean = true
                 i += 1
@@ -64,35 +71,32 @@ struct GodotBuildPlugin: CommandPlugin {
             }
         }
 
-        // 1. Resolve Output Directory (addons/<slug>/bin)
-        var outputDir: String?
-        let searchCandidates = [
-            context.package.directory.appending(subpath: "../godot_editor/addons").string,
-            context.package.directory.appending(subpath: "../../godot_editor/addons").string,
-            context.package.directory.appending(subpath: "platforms/godot_editor/addons").string,
-            context.package.directory.appending(subpath: "../addons").string,
-            context.package.directory.appending(subpath: "addons").string
-        ]
+        // 1. Resolve Output Directory (addons/<slug>/bin or build/artifacts fallback)
+        if outputDir == nil {
+            let searchCandidates = [
+                context.package.directory.appending(subpath: "../godot_editor/addons").string,
+                context.package.directory.appending(subpath: "../../godot_editor/addons").string,
+                context.package.directory.appending(subpath: "platforms/godot_editor/addons").string,
+                context.package.directory.appending(subpath: "../addons").string,
+                context.package.directory.appending(subpath: "addons").string
+            ]
 
-        for parent in searchCandidates {
-            if fileManager.fileExists(atPath: parent) {
-                if let items = try? fileManager.subpathsOfDirectory(atPath: parent) {
-                    for item in items {
-                        if item.hasSuffix("/bin") || item == "bin" {
-                            outputDir = URL(fileURLWithPath: parent).appendingPathComponent(item).path
-                            break
+            for parent in searchCandidates {
+                if fileManager.fileExists(atPath: parent) {
+                    if let items = try? fileManager.subpathsOfDirectory(atPath: parent) {
+                        for item in items {
+                            if item.hasSuffix("/bin") || item == "bin" {
+                                outputDir = URL(fileURLWithPath: parent).appendingPathComponent(item).path
+                                break
+                            }
                         }
                     }
                 }
+                if outputDir != nil { break }
             }
-            if outputDir != nil { break }
         }
 
-        guard let resolvedOutputDir = outputDir else {
-            print("[ERROR] Could not auto-detect Godot addon 'bin' directory. Please ensure an 'addons/<slug>/bin' exists.")
-            Foundation.exit(1)
-        }
-
+        let resolvedOutputDir = outputDir ?? context.package.directory.appending(subpath: "build/artifacts").string
         try fileManager.createDirectory(atPath: resolvedOutputDir, withIntermediateDirectories: true)
 
         // 2. Delegate build to universal builder (build_plugin.sh)

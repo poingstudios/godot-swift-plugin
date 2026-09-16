@@ -161,8 +161,8 @@ run_step() {
         done
     fi
 
-    wait "${pid}"
-    local exit_code=$?
+    local exit_code=0
+    wait "${pid}" || exit_code=$?
     local total_elapsed=$(( $(date +%s) - start_time ))
 
     local done_pct="${target_pct}"
