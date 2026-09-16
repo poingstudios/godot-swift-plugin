@@ -1,6 +1,6 @@
 # Introduction
 
-**Godot Swift Plugin** is a lightweight, official-grade toolkit developed by [Poing Studios](https://github.com/Poing-Studios) for building native iOS and Apple plugins in Godot 4.x using pure Swift.
+**Godot Swift Plugin** is a lightweight toolkit developed by [Poing Studios](https://github.com/Poing-Studios) for building native iOS and Apple plugins in Godot 4.x using pure Swift.
 
 ## Why Godot Swift Plugin?
 

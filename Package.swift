@@ -15,6 +15,10 @@ let package = Package(
             type: .static,
             targets: ["GodotSwiftPlugin"]
         ),
+        .plugin(
+            name: "GodotBuildPlugin",
+            targets: ["GodotBuildPlugin"]
+        ),
     ],
     targets: [
         .target(
@@ -31,6 +35,19 @@ let package = Package(
             name: "GodotSwiftPluginTests",
             dependencies: ["GodotSwiftPlugin"],
             path: "Tests/GodotSwiftPluginTests"
+        ),
+        .plugin(
+            name: "GodotBuildPlugin",
+            capability: .command(
+                intent: .custom(
+                    verb: "godot-build",
+                    description: "Builds Godot Swift plugin binaries for iOS and macOS"
+                ),
+                permissions: [
+                    .writeToPackageDirectory(reason: "Outputs compiled binaries to Godot addon bin/ directory")
+                ]
+            ),
+            path: "Plugins/GodotBuildPlugin"
         ),
     ]
 )

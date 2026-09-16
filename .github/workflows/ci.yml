@@ -24,7 +24,7 @@ jobs:
         run: swift test
 
       - name: Run Example Swift Unit Tests
-        run: swift test --package-path example/ios
+        run: swift test --package-path example/apple
 
   build-example:
     name: "Build: Example Plugin (macOS & iOS)"
@@ -36,7 +36,7 @@ jobs:
           submodules: recursive
 
       - name: Compile and Package Example Plugin
-        run: ./example/ios/scripts/build_local.sh all
+        run: ./scripts/build_local.sh all
 
       - name: Verify Build Artifacts
         run: |
