@@ -23,89 +23,12 @@
 
 set -euo pipefail
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-DIM='\033[2m'
-NC='\033[0m'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${SCRIPT_DIR}/common.sh" ]; then
+    # shellcheck source=scripts/common.sh
+    source "${SCRIPT_DIR}/common.sh"
+fi
 
-print_welcome_banner() {
-    local C="${CYAN}"
-    echo -e "\n${C}╭──────────────────────────────────────────────────────────────────────────────╮${NC}"
-    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
-    echo -e "${C}│${NC}                              ${BOLD}Godot Swift Plugin${NC}                              ${C}│${NC}"
-    echo -e "${C}│${NC}             ${DIM}Build native Apple plugins for Godot with pure Swift${NC}             ${C}│${NC}"
-    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
-    echo -e "${C}├──────────────────────────────────────────────────────────────────────────────┤${NC}"
-    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
-    echo -e "${C}│${NC}  ⭐ Star on GitHub:     ${CYAN}https://github.com/poingstudios/godot-swift-plugin${NC}   ${C}│${NC}"
-    echo -e "${C}│${NC}  💖 Support on Patreon: ${CYAN}https://www.patreon.com/c/poingstudios${NC}               ${C}│${NC}"
-    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
-    echo -e "${C}╰──────────────────────────────────────────────────────────────────────────────╯${NC}\n"
-}
-
-print_finish_banner() {
-    local C="${GREEN}"
-    echo -e "\n${C}╭──────────────────────────────────────────────────────────────────────────────╮${NC}"
-    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
-    echo -e "${C}│${NC}                              ${BOLD}🎉 Happy Game Dev!${NC}                              ${C}│${NC}"
-    echo -e "${C}│${NC}                ${DIM}Thank you for building with Godot Swift Plugin${NC}                ${C}│${NC}"
-    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
-    echo -e "${C}├──────────────────────────────────────────────────────────────────────────────┤${NC}"
-    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
-    echo -e "${C}│${NC}  ⭐ Star on GitHub:     ${CYAN}https://github.com/poingstudios/godot-swift-plugin${NC}   ${C}│${NC}"
-    echo -e "${C}│${NC}  💖 Support on Patreon: ${CYAN}https://www.patreon.com/c/poingstudios${NC}               ${C}│${NC}"
-    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
-    echo -e "${C}╰──────────────────────────────────────────────────────────────────────────────╯${NC}\n"
-}
-
-run_with_spinner() {
-    local message="$1"
-    shift
-    local log_file
-    log_file="$(mktemp /tmp/gsp_build_XXXXXX)"
-
-    local spinner_chars=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
-    local delay=0.08
-
-    "$@" > "${log_file}" 2>&1 &
-    local pid=$!
-
-    if [ -t 2 ]; then
-        printf "\033[?25l" >&2
-        local i=0
-        while kill -0 "${pid}" 2>/dev/null; do
-            local spin="${spinner_chars[i % ${#spinner_chars[@]}]}"
-            printf "\r  \033[1;36m%s\033[0m %s" "${spin}" "${message}" >&2
-            i=$((i + 1))
-            sleep "${delay}"
-        done
-        printf "\033[?25h" >&2
-    fi
-
-    wait "${pid}"
-    local exit_code=$?
-
-    if [ "${exit_code}" -eq 0 ]; then
-        if [ -t 2 ]; then
-            printf "\r  \033[1;32m✓\033[0m %s\n" "${message}" >&2
-        else
-            printf "  \033[1;32m✓\033[0m %s\n" "${message}" >&2
-        fi
-        rm -f "${log_file}"
-        return 0
-    else
-        if [ -t 2 ]; then
-            printf "\r  \033[1;31m✖\033[0m %s (failed)\n\n" "${message}" >&2
-        else
-            printf "  \033[1;31m✖\033[0m %s (failed)\n\n" "${message}" >&2
-        fi
-        cat "${log_file}" >&2
-        rm -f "${log_file}"
-        return "${exit_code}"
-    fi
-}
 
 on_error() {
     local exit_code="$1"

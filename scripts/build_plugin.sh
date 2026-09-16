@@ -23,13 +23,11 @@
 
 set -euo pipefail
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-DIM='\033[2m'
-NC='\033[0m'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${SCRIPT_DIR}/common.sh" ]; then
+    # shellcheck source=scripts/common.sh
+    source "${SCRIPT_DIR}/common.sh"
+fi
 
 on_error() {
     local exit_code="$1"
@@ -39,126 +37,9 @@ on_error() {
 }
 trap 'on_error $? $LINENO' ERR
 
-run_step() {
-    local est_secs=15
-    local step_label=""
-    local success_label=""
-
-    if [[ "$1" =~ ^[0-9]+$ ]]; then
-        est_secs="$1"
-        step_label="$2"
-        success_label="$3"
-        shift 3
-    else
-        step_label="$1"
-        success_label="$2"
-        shift 2
-    fi
-
-    BUILD_CURRENT_STEP=$(( ${BUILD_CURRENT_STEP:-0} + 1 ))
-    local step_idx="${BUILD_CURRENT_STEP}"
-    local total_steps="${BUILD_TOTAL_STEPS:-1}"
-
-    local base_pct=$(( (step_idx - 1) * 100 / total_steps ))
-    local target_pct=$(( step_idx * 100 / total_steps ))
-    local span=$(( target_pct - base_pct ))
-
-    local tty_out=""
-    if [ -t 2 ]; then
-        tty_out="/dev/stderr"
-    elif [ -t 1 ]; then
-        tty_out="/dev/stdout"
-    elif [ -c /dev/tty ] && { : > /dev/tty; } 2>/dev/null; then
-        tty_out="/dev/tty"
-    fi
-
-    local log_file
-    log_file="$(mktemp /tmp/gsp_step_XXXXXX)"
-
-    local spinner_chars=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
-    local delay=0.08
-    local bar_width=12
-    local start_time=$(date +%s)
-
-    "$@" > "${log_file}" 2>&1 &
-    local pid=$!
-
-    if [ -n "${tty_out}" ]; then
-        printf "\033[?25l" > "${tty_out}"
-        local tick=0
-        while kill -0 "${pid}" 2>/dev/null; do
-            local spin="${spinner_chars[tick % ${#spinner_chars[@]}]}"
-            local elapsed=$(( $(date +%s) - start_time ))
-
-            local elapsed_ms=$(( tick * 80 ))
-            local inc=$(( elapsed_ms * span / (est_secs * 1000) ))
-            if [ "${inc}" -ge "${span}" ]; then
-                inc=$(( span - 1 ))
-            fi
-            local pct=$(( base_pct + inc ))
-
-            local filled_cnt=$(( pct * bar_width / 100 ))
-            local empty_cnt=$(( bar_width - filled_cnt ))
-            local filled=""
-            local empty=""
-            [ "${filled_cnt}" -gt 0 ] && filled=$(printf "%*s" "${filled_cnt}" | tr " " "█")
-            [ "${empty_cnt}" -gt 0 ] && empty=$(printf "%*s" "${empty_cnt}" | tr " " "░")
-
-            printf "\r\033[K  \033[1;36m%s\033[0m \033[2m[\033[0m\033[36m%s\033[0m\033[2m%s]\033[0m \033[1m%3d%%\033[0m  %s \033[2m(%ds)\033[0m" \
-                "${spin}" "${filled}" "${empty}" "${pct}" "${step_label}" "${elapsed}" > "${tty_out}"
-            tick=$(( tick + 1 ))
-            sleep "${delay}"
-        done
-        printf "\033[?25h" > "${tty_out}"
-    else
-        printf "  \033[2m•\033[0m %s...\n" "${step_label}" >&2
-    fi
-
-    wait "${pid}"
-    local exit_code=$?
-    local total_elapsed=$(( $(date +%s) - start_time ))
-
-    local warnings=()
-    if [ -f "${log_file}" ]; then
-        while IFS= read -r wline; do
-            [ -n "${wline}" ] && warnings+=("${wline}")
-        done < <(grep -E "(warning:|⚠️)" "${log_file}" 2>/dev/null | grep -v "no_warning_for_no_symbols" | head -n 5 || true)
-    fi
-
-    if [ "${exit_code}" -eq 0 ]; then
-        if [ ${#warnings[@]} -gt 0 ]; then
-            if [ -n "${tty_out}" ]; then
-                printf "\r\033[K  \033[1;33m⚠\033[0m %s \033[2m(%d warning%s)\033[0m \033[2m(%ds)\033[0m\n" "${success_label}" "${#warnings[@]}" "$([ ${#warnings[@]} -gt 1 ] && echo "s" || echo "")" "${total_elapsed}" > "${tty_out}"
-            else
-                printf "  \033[1;33m⚠\033[0m %s \033[2m(%d warning%s)\033[0m \033[2m(%ds)\033[0m\n" "${success_label}" "${#warnings[@]}" "$([ ${#warnings[@]} -gt 1 ] && echo "s" || echo "")" "${total_elapsed}" >&2
-            fi
-            for w in "${warnings[@]}"; do
-                printf "    \033[33m%s\033[0m\n" "${w}" >&2
-            done
-        else
-            if [ -n "${tty_out}" ]; then
-                printf "\r\033[K  \033[1;32m✓\033[0m %s \033[2m(%ds)\033[0m\n" "${success_label}" "${total_elapsed}" > "${tty_out}"
-            else
-                printf "  \033[1;32m✓\033[0m %s \033[2m(%ds)\033[0m\n" "${success_label}" "${total_elapsed}" >&2
-            fi
-        fi
-        rm -f "${log_file}"
-        return 0
-    else
-        if [ -n "${tty_out}" ]; then
-            printf "\r\033[K  \033[1;31m✖\033[0m %s \033[1;31m(failed after %ds)\033[0m\n\n" "${step_label}" "${total_elapsed}" > "${tty_out}"
-        else
-            printf "  \033[1;31m✖\033[0m %s \033[1;31m(failed after %ds)\033[0m\n\n" "${step_label}" "${total_elapsed}" >&2
-        fi
-        if [ -f "${log_file}" ]; then
-            cat "${log_file}" >&2
-            rm -f "${log_file}"
-        fi
-        return "${exit_code}"
-    fi
-}
 
 show_help() {
+    print_welcome_banner
     echo "Usage: ./scripts/build_plugin.sh [options]"
     echo ""
     echo "Universal builder for Godot Swift plugins (macOS & iOS)."
@@ -247,14 +128,14 @@ if [ -z "${PACKAGE_DIR}" ]; then
     elif [ -f "../Package.swift" ]; then
         PACKAGE_DIR="$(cd .. && pwd)"
     else
-        echo -e "${RED}[ERROR] Could not find Package.swift. Please specify --package-dir.${NC}" >&2
+        echo -e "  ${RED}✖ Error:${NC} Could not find Package.swift. Please specify --package-dir.\n" >&2
         exit 1
     fi
 fi
 PACKAGE_DIR="$(cd "${PACKAGE_DIR}" && pwd)"
 
 if [ ! -f "${PACKAGE_DIR}/Package.swift" ]; then
-    echo -e "${RED}[ERROR] No Package.swift found in: ${PACKAGE_DIR}${NC}" >&2
+    echo -e "  ${RED}✖ Error:${NC} No Package.swift found in: ${PACKAGE_DIR}\n" >&2
     exit 1
 fi
 
@@ -287,16 +168,8 @@ if [ -z "${OUTPUT_DIR}" ]; then
         if [ -d "${base}" ]; then
             FIRST_ADDON="$(find "${base}" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
             if [ -n "${FIRST_ADDON}" ]; then
-                if [ -d "${FIRST_ADDON}/ios/bin" ]; then
-                    OUTPUT_DIR="${FIRST_ADDON}/ios/bin"
-                    break
-                elif [ -d "${FIRST_ADDON}/bin" ]; then
-                    OUTPUT_DIR="${FIRST_ADDON}/bin"
-                    break
-                else
-                    OUTPUT_DIR="${FIRST_ADDON}/bin"
-                    break
-                fi
+                OUTPUT_DIR="${FIRST_ADDON}/bin"
+                break
             fi
         fi
     done
@@ -311,6 +184,7 @@ BUILD_DIR="${PACKAGE_DIR}/build"
 DERIVED_DATA="${BUILD_DIR}/DerivedData"
 
 if [ "${QUIET_HEADER}" = false ]; then
+    print_welcome_banner
     echo -e "${BOLD}Building Godot Swift Plugin...${NC}"
     echo -e "  ${DIM}•${NC} Plugin Name:   ${GREEN}${PLUGIN_NAME}${NC}"
     echo -e "  ${DIM}•${NC} Package Dir:   ${PACKAGE_DIR}"
@@ -323,19 +197,108 @@ fi
 # Check prerequisites
 for tool in swift xcodebuild libtool xcrun; do
     if ! command -v "${tool}" &> /dev/null; then
-        echo -e "${RED}[ERROR] Required tool '${tool}' is not installed or not in PATH.${NC}" >&2
+        echo -e "  ${RED}✖ Error:${NC} Required tool '${tool}' is not installed or not in PATH.\n" >&2
         exit 1
     fi
 done
 
 if [ "$CLEAN" = true ]; then
-    echo -e "${CYAN}==> Cleaning build directory: ${BUILD_DIR}...${NC}"
+    echo -e "  ${DIM}•${NC} Cleaning build directory: ${BUILD_DIR}..."
     rm -rf "${BUILD_DIR}"
 fi
 mkdir -p "${BUILD_DIR}"
 
-build_macos() {
-    local dynamic_product
+compile_macos_slice() {
+    local cfg_lower
+    cfg_lower="$(echo "${CONFIG}" | tr '[:upper:]' '[:lower:]')"
+    local spm_build_dir="${BUILD_DIR}/spm"
+    swift build --package-path "${PACKAGE_DIR}" --build-path "${spm_build_dir}" -c "${cfg_lower}" --product "${dynamic_product}"
+    local bin_path
+    bin_path="$(swift build --package-path "${PACKAGE_DIR}" --build-path "${spm_build_dir}" -c "${cfg_lower}" --show-bin-path)"
+    local dylib="${bin_path}/lib${dynamic_product}.dylib"
+    if [ -f "${dylib}" ]; then
+        cp "${dylib}" "${OUTPUT_DIR}/lib${dynamic_product}.dylib"
+        chmod 755 "${OUTPUT_DIR}/lib${dynamic_product}.dylib"
+    else
+        echo -e "  ${RED}✖ Error:${NC} Built dylib not found at: ${dylib}\n" >&2
+        return 1
+    fi
+}
+
+compile_ios_device() {
+    (cd "${PACKAGE_DIR}" && xcodebuild build \
+        -scheme "${scheme}" \
+        -configuration "${CONFIG}" \
+        -destination "generic/platform=iOS" \
+        -derivedDataPath "${DERIVED_DATA}/device" \
+        SKIP_INSTALL=NO \
+        -quiet)
+}
+
+compile_ios_simulator() {
+    (cd "${PACKAGE_DIR}" && xcodebuild build \
+        -scheme "${scheme}" \
+        -configuration "${CONFIG}" \
+        -destination "generic/platform=iOS Simulator" \
+        -derivedDataPath "${DERIVED_DATA}/sim" \
+        SKIP_INSTALL=NO \
+        -quiet)
+}
+
+assemble_ios_static_libs() {
+    if [ ! -d "${device_products}" ]; then
+        device_products="${DERIVED_DATA}/device/Build/Products/Debug-iphoneos"
+    fi
+    if [ ! -d "${sim_products}" ]; then
+        sim_products="${DERIVED_DATA}/sim/Build/Products/Debug-iphonesimulator"
+    fi
+
+    if [ -f "${device_products}/lib${PLUGIN_NAME}.a" ]; then
+        cp "${device_products}/lib${PLUGIN_NAME}.a" "${device_lib}"
+    else
+        local dev_objs=()
+        while IFS= read -r obj; do
+            dev_objs+=("${obj}")
+        done < <(find "${device_products}" -maxdepth 1 \( -name "*.o" -o -name "*.a" \) ! -name "*Tests*" ! -name "*PackageDescription*" | sort)
+
+        if [ ${#dev_objs[@]} -eq 0 ]; then
+            echo -e "  ${RED}✖ Error:${NC} No object files found in ${device_products}\n" >&2
+            return 1
+        fi
+        libtool -static -no_warning_for_no_symbols -o "${device_lib}" "${dev_objs[@]}"
+    fi
+
+    if [ -f "${sim_products}/lib${PLUGIN_NAME}.a" ]; then
+        cp "${sim_products}/lib${PLUGIN_NAME}.a" "${sim_lib}"
+    else
+        local sim_objs=()
+        while IFS= read -r obj; do
+            sim_objs+=("${obj}")
+        done < <(find "${sim_products}" -maxdepth 1 \( -name "*.o" -o -name "*.a" \) ! -name "*Tests*" ! -name "*PackageDescription*" | sort)
+
+        if [ ${#sim_objs[@]} -eq 0 ]; then
+            echo -e "  ${RED}✖ Error:${NC} No object files found in ${sim_products}\n" >&2
+            return 1
+        fi
+        libtool -static -no_warning_for_no_symbols -o "${sim_lib}" "${sim_objs[@]}"
+    fi
+}
+
+create_ios_xcframework() {
+    rm -rf "${xcframework_build}"
+    xcodebuild -create-xcframework \
+        -library "${device_lib}" \
+        -library "${sim_lib}" \
+        -output "${xcframework_build}"
+
+    rm -rf "${xcframework_dest}"
+    cp -R "${xcframework_build}" "${xcframework_dest}"
+}
+
+pipeline_reset
+
+# Register macOS step if targeting macOS or all
+if [ "${TARGET}" = "macos" ] || [ "${TARGET}" = "all" ]; then
     dynamic_product="$(python3 -c "
 import re
 try:
@@ -350,158 +313,75 @@ except Exception:
 " 2>/dev/null || true)"
 
     if [ -z "${dynamic_product}" ]; then
-        if [ "${TARGET}" == "macos" ]; then
-            echo -e "${RED}[ERROR] Package does not define a dynamic library product for macOS.${NC}" >&2
+        if [ "${TARGET}" = "macos" ]; then
+            echo -e "  ${RED}✖ Error:${NC} Package does not define a dynamic library product for macOS.\n" >&2
             exit 1
         else
-            echo -e "${YELLOW}==> [macOS] Skipping macOS build (no dynamic library product defined in Package.swift)${NC}"
-            return 0
+            echo -e "  ${YELLOW}⚠ Skipping macOS build (no dynamic library product defined in Package.swift)${NC}"
         fi
+    else
+        pipeline_add_step "macOS" 8 \
+            "Compiling dynamic library (${dynamic_product})" \
+            "lib${dynamic_product}.dylib deployed" \
+            compile_macos_slice
     fi
+fi
 
-    echo -e "\n${CYAN}==> [macOS] Compiling dynamic library via SwiftPM (${dynamic_product})...${NC}"
-    local cfg_lower
-    cfg_lower="$(echo "${CONFIG}" | tr '[:upper:]' '[:lower:]')"
-    local spm_build_dir="${BUILD_DIR}/spm"
-
-    compile_macos_slice() {
-        swift build --package-path "${PACKAGE_DIR}" --build-path "${spm_build_dir}" -c "${cfg_lower}" --product "${dynamic_product}"
-        local bin_path
-        bin_path="$(swift build --package-path "${PACKAGE_DIR}" --build-path "${spm_build_dir}" -c "${cfg_lower}" --show-bin-path)"
-        local dylib="${bin_path}/lib${dynamic_product}.dylib"
-        if [ -f "${dylib}" ]; then
-            cp "${dylib}" "${OUTPUT_DIR}/lib${dynamic_product}.dylib"
-            chmod 755 "${OUTPUT_DIR}/lib${dynamic_product}.dylib"
-        else
-            echo -e "${RED}[ERROR] Built dylib not found at: ${dylib}${NC}" >&2
-            return 1
-        fi
-    }
-
-    run_step 8 "[macOS] Compiling dynamic library (${dynamic_product})" \
-             "[macOS] lib${dynamic_product}.dylib deployed" \
-             compile_macos_slice
-}
-
-build_ios() {
-    cd "${PACKAGE_DIR}"
-
-    local scheme="${PLUGIN_NAME}Static"
-    if ! xcodebuild -list 2>/dev/null | grep -q "${scheme}"; then
+# Register iOS steps if targeting iOS or all
+if [ "${TARGET}" = "ios" ] || [ "${TARGET}" = "all" ]; then
+    scheme="${PLUGIN_NAME}Static"
+    if ! (cd "${PACKAGE_DIR}" && xcodebuild -list 2>/dev/null | grep -q "${scheme}"); then
         scheme="${PLUGIN_NAME}"
     fi
 
-    local device_products="${DERIVED_DATA}/device/Build/Products/${CONFIG}-iphoneos"
-    local sim_products="${DERIVED_DATA}/sim/Build/Products/${CONFIG}-iphonesimulator"
-    local device_lib="${BUILD_DIR}/lib${PLUGIN_NAME}-device.a"
-    local sim_lib="${BUILD_DIR}/lib${PLUGIN_NAME}-sim.a"
-    local xcframework_build="${BUILD_DIR}/${PLUGIN_NAME}.xcframework"
-    local xcframework_dest="${OUTPUT_DIR}/${PLUGIN_NAME}.xcframework"
+    device_products="${DERIVED_DATA}/device/Build/Products/${CONFIG}-iphoneos"
+    sim_products="${DERIVED_DATA}/sim/Build/Products/${CONFIG}-iphonesimulator"
+    device_lib="${BUILD_DIR}/lib${PLUGIN_NAME}-device.a"
+    sim_lib="${BUILD_DIR}/lib${PLUGIN_NAME}-sim.a"
+    xcframework_build="${BUILD_DIR}/${PLUGIN_NAME}.xcframework"
+    xcframework_dest="${OUTPUT_DIR}/${PLUGIN_NAME}.xcframework"
 
-    # 1. iOS Device Slice
-    run_step 18 "[iOS 1/4] Compiling device slice (arm64)" \
-             "[iOS 1/4] Device slice compiled (arm64)" \
-             xcodebuild build \
-                 -scheme "${scheme}" \
-                 -configuration "${CONFIG}" \
-                 -destination "generic/platform=iOS" \
-                 -derivedDataPath "${DERIVED_DATA}/device" \
-                 SKIP_INSTALL=NO \
-                 -quiet
+    pipeline_add_step "iOS" 18 \
+        "Compiling device slice (arm64)" \
+        "Device slice compiled (arm64)" \
+        compile_ios_device
 
-    # 2. iOS Simulator Slice
-    run_step 18 "[iOS 2/4] Compiling simulator slice (universal)" \
-             "[iOS 2/4] Simulator slice compiled (universal)" \
-             xcodebuild build \
-                 -scheme "${scheme}" \
-                 -configuration "${CONFIG}" \
-                 -destination "generic/platform=iOS Simulator" \
-                 -derivedDataPath "${DERIVED_DATA}/sim" \
-                 SKIP_INSTALL=NO \
-                 -quiet
+    pipeline_add_step "iOS" 18 \
+        "Compiling simulator slice (universal)" \
+        "Simulator slice compiled (universal)" \
+        compile_ios_simulator
 
-    # 3. Dynamic Object Harvesting & Static Library Archiving
-    assemble_static_libs() {
-        if [ ! -d "${device_products}" ]; then
-            device_products="${DERIVED_DATA}/device/Build/Products/Debug-iphoneos"
-        fi
-        if [ ! -d "${sim_products}" ]; then
-            sim_products="${DERIVED_DATA}/sim/Build/Products/Debug-iphonesimulator"
-        fi
+    pipeline_add_step "iOS" 3 \
+        "Assembling static libraries" \
+        "Static libraries assembled" \
+        assemble_ios_static_libs
 
-        if [ -f "${device_products}/lib${PLUGIN_NAME}.a" ]; then
-            cp "${device_products}/lib${PLUGIN_NAME}.a" "${device_lib}"
-        else
-            local dev_objs=()
-            while IFS= read -r obj; do
-                dev_objs+=("${obj}")
-            done < <(find "${device_products}" -maxdepth 1 \( -name "*.o" -o -name "*.a" \) ! -name "*Tests*" ! -name "*PackageDescription*" | sort)
+    pipeline_add_step "iOS" 2 \
+        "Creating universal XCFramework" \
+        "${PLUGIN_NAME}.xcframework created" \
+        create_ios_xcframework
+fi
 
-            if [ ${#dev_objs[@]} -eq 0 ]; then
-                echo -e "${RED}[ERROR] No object files found in ${device_products}${NC}" >&2
-                return 1
-            fi
-            libtool -static -no_warning_for_no_symbols -o "${device_lib}" "${dev_objs[@]}"
-        fi
+if [ "$(pipeline_count)" -eq 0 ]; then
+    echo -e "  ${RED}✖ Error:${NC} No build steps registered for target '${TARGET}'.\n" >&2
+    exit 1
+fi
 
-        if [ -f "${sim_products}/lib${PLUGIN_NAME}.a" ]; then
-            cp "${sim_products}/lib${PLUGIN_NAME}.a" "${sim_lib}"
-        else
-            local sim_objs=()
-            while IFS= read -r obj; do
-                sim_objs+=("${obj}")
-            done < <(find "${sim_products}" -maxdepth 1 \( -name "*.o" -o -name "*.a" \) ! -name "*Tests*" ! -name "*PackageDescription*" | sort)
+pipeline_run
 
-            if [ ${#sim_objs[@]} -eq 0 ]; then
-                echo -e "${RED}[ERROR] No object files found in ${sim_products}${NC}" >&2
-                return 1
-            fi
-            libtool -static -no_warning_for_no_symbols -o "${sim_lib}" "${sim_objs[@]}"
-        fi
-    }
-
-    run_step 3 "[iOS 3/4] Assembling static libraries" \
-             "[iOS 3/4] Static libraries assembled" \
-             assemble_static_libs
-
-    # 4. Create XCFramework
-    create_xcframework_step() {
-        rm -rf "${xcframework_build}"
-        xcodebuild -create-xcframework \
-            -library "${device_lib}" \
-            -library "${sim_lib}" \
-            -output "${xcframework_build}"
-
-        rm -rf "${xcframework_dest}"
-        cp -R "${xcframework_build}" "${xcframework_dest}"
-    }
-
-    run_step 2 "[iOS 4/4] Creating universal XCFramework" \
-             "[iOS 4/4] ${PLUGIN_NAME}.xcframework created" \
-             create_xcframework_step
-}
-
-BUILD_CURRENT_STEP=0
-case "${TARGET}" in
-    macos)
-        BUILD_TOTAL_STEPS=1
-        build_macos
-        ;;
-    ios)
-        BUILD_TOTAL_STEPS=4
-        build_ios
-        ;;
-    all)
-        BUILD_TOTAL_STEPS=5
-        build_macos
-        build_ios
-        ;;
-    *)
-        echo -e "${RED}[ERROR] Unknown target '${TARGET}'. Use 'macos', 'ios', or 'all'.${NC}" >&2
-        exit 1
-        ;;
-esac
 
 if [ "${QUIET_HEADER}" = false ]; then
-    echo -e "\n  ${GREEN}✓${NC} Build completed successfully (${OUTPUT_DIR})\n"
+    echo -e "\n  ${GREEN}✓${NC} Build completed successfully (${TARGET})\n"
+
+    echo -e "${BOLD}Next steps:${NC}"
+    rel_editor="platforms/godot_editor"
+    if [ ! -d "${rel_editor}" ] && [ -d "example/godot_editor" ]; then
+        rel_editor="example/godot_editor"
+    fi
+    echo -e "  1. ${CYAN}Open in Godot Engine (4.6+):${NC}"
+    echo -e "     Open '${rel_editor}' and press ${BOLD}F5${NC} to run your scene\n"
+    echo -e "  2. ${CYAN}Run Swift unit tests:${NC}"
+    echo -e "     swift test --package-path ${PACKAGE_DIR}\n"
+
+    print_finish_banner
 fi

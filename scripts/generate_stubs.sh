@@ -22,15 +22,14 @@
 # SOFTWARE.
 
 set -euo pipefail
-
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m'
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${SCRIPT_DIR}/common.sh" ]; then
+    # shellcheck source=scripts/common.sh
+    source "${SCRIPT_DIR}/common.sh"
+fi
+
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
 STUB_SRC="${SCRIPT_DIR}/stubs/stub.c"
 
 DEST_DIR="${1:-${REPO_ROOT}/templates/stubs}"
