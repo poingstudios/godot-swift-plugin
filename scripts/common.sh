@@ -108,41 +108,57 @@ run_step() {
 
     if [ "${is_tty}" = true ]; then
         printf "\033[?25l" >&2
-    fi
+        local tick=0
+        while kill -0 "${pid}" 2>/dev/null; do
+            local spin="${spinner_chars[tick % ${#spinner_chars[@]}]}"
+            local elapsed=$(( $(date +%s) - start_time ))
+            local elapsed_ms=$(( tick * 100 ))
+            local inc=$(( elapsed_ms * span / (est_secs * 1000) ))
+            [ "${inc}" -ge "${span}" ] && inc=$(( span - 1 ))
+            local pct=$(( base_pct + inc ))
+            [ "${pct}" -lt 1 ] && pct=1
 
-    local tick=0
-    while kill -0 "${pid}" 2>/dev/null; do
-        local spin="${spinner_chars[tick % ${#spinner_chars[@]}]}"
-        local elapsed=$(( $(date +%s) - start_time ))
+            local filled_cnt=$(( pct * bar_width / 100 ))
+            local empty_cnt=$(( bar_width - filled_cnt ))
+            local filled=""
+            local empty=""
+            [ "${filled_cnt}" -gt 0 ] && filled=$(printf "%*s" "${filled_cnt}" | tr " " "█")
+            [ "${empty_cnt}" -gt 0 ] && empty=$(printf "%*s" "${empty_cnt}" | tr " " "░")
 
-        local elapsed_ms=$(( tick * 100 ))
-        if [ "${is_tty}" = false ]; then
-            elapsed_ms=$(( tick * 300 ))
-        fi
+            printf "\r\033[K  \033[1;36m%s\033[0m \033[2m[\033[0m\033[36m%s\033[0m\033[2m%s]\033[0m \033[1m%3d%%\033[0m  %s \033[2m(%ds)\033[0m" \
+                "${spin}" "${filled}" "${empty}" "${pct}" "${step_label}" "${elapsed}" >&2
 
-        local inc=$(( elapsed_ms * span / (est_secs * 1000) ))
-        if [ "${inc}" -ge "${span}" ]; then
-            inc=$(( span - 1 ))
-        fi
-        local pct=$(( base_pct + inc ))
-        [ "${pct}" -lt 1 ] && pct=1
-
-        local filled_cnt=$(( pct * bar_width / 100 ))
-        local empty_cnt=$(( bar_width - filled_cnt ))
-        local filled=""
-        local empty=""
-        [ "${filled_cnt}" -gt 0 ] && filled=$(printf "%*s" "${filled_cnt}" | tr " " "█")
-        [ "${empty_cnt}" -gt 0 ] && empty=$(printf "%*s" "${empty_cnt}" | tr " " "░")
-
-        printf "\r\033[K  \033[1;36m%s\033[0m \033[2m[\033[0m\033[36m%s\033[0m\033[2m%s]\033[0m \033[1m%3d%%\033[0m  %s \033[2m(%ds)\033[0m" \
-            "${spin}" "${filled}" "${empty}" "${pct}" "${step_label}" "${elapsed}" >&2
-
-        tick=$(( tick + 1 ))
-        sleep "${delay}"
-    done
-
-    if [ "${is_tty}" = true ]; then
+            tick=$(( tick + 1 ))
+            sleep 0.1
+        done
         printf "\033[?25h" >&2
+    else
+        local tick=0
+        local last_logged_sec=-1
+        while kill -0 "${pid}" 2>/dev/null; do
+            local elapsed=$(( $(date +%s) - start_time ))
+            if [ "${elapsed}" -ne "${last_logged_sec}" ] && { [ "${elapsed}" -eq 0 ] || [ $(( elapsed % 3 )) -eq 0 ]; }; then
+                last_logged_sec="${elapsed}"
+                local spin="${spinner_chars[tick % ${#spinner_chars[@]}]}"
+                local elapsed_ms=$(( elapsed * 1000 ))
+                local inc=$(( elapsed_ms * span / (est_secs * 1000) ))
+                [ "${inc}" -ge "${span}" ] && inc=$(( span - 1 ))
+                local pct=$(( base_pct + inc ))
+                [ "${pct}" -lt 1 ] && pct=1
+
+                local filled_cnt=$(( pct * bar_width / 100 ))
+                local empty_cnt=$(( bar_width - filled_cnt ))
+                local filled=""
+                local empty=""
+                [ "${filled_cnt}" -gt 0 ] && filled=$(printf "%*s" "${filled_cnt}" | tr " " "█")
+                [ "${empty_cnt}" -gt 0 ] && empty=$(printf "%*s" "${empty_cnt}" | tr " " "░")
+
+                printf "  \033[1;36m%s\033[0m \033[2m[\033[0m\033[36m%s\033[0m\033[2m%s]\033[0m \033[1m%3d%%\033[0m  %s \033[2m(%ds)\033[0m\n" \
+                    "${spin}" "${filled}" "${empty}" "${pct}" "${step_label}" "${elapsed}" >&2
+            fi
+            tick=$(( tick + 1 ))
+            sleep 0.5
+        done
     fi
 
     wait "${pid}"
@@ -159,6 +175,9 @@ run_step() {
     local bar_done
     bar_done="$(printf "\033[2m[\033[0m\033[32m%s\033[0m\033[2m%s]\033[0m \033[1;32m%3d%%\033[0m" "${done_filled}" "${done_empty}" "${done_pct}")"
 
+    local prefix_clear=""
+    [ "${is_tty}" = true ] && prefix_clear="\r\033[K"
+
     local warnings=()
     if [ -f "${log_file}" ]; then
         while IFS= read -r wline; do
@@ -168,18 +187,18 @@ run_step() {
 
     if [ "${exit_code}" -eq 0 ]; then
         if [ ${#warnings[@]} -gt 0 ]; then
-            printf "\r\033[K  \033[1;33m⚠\033[0m %b  %s \033[2m(%d warning%s)\033[0m \033[2m(%ds)\033[0m\n" \
-                "${bar_done}" "${success_label}" "${#warnings[@]}" "$([ ${#warnings[@]} -gt 1 ] && echo "s" || echo "")" "${total_elapsed}" >&2
+            printf "%b  \033[1;33m⚠\033[0m %b  %s \033[2m(%d warning%s)\033[0m \033[2m(%ds)\033[0m\n" \
+                "${prefix_clear}" "${bar_done}" "${success_label}" "${#warnings[@]}" "$([ ${#warnings[@]} -gt 1 ] && echo "s" || echo "")" "${total_elapsed}" >&2
             for w in "${warnings[@]}"; do
                 printf "    \033[33m%s\033[0m\n" "${w}" >&2
             done
         else
-            printf "\r\033[K  \033[1;32m✓\033[0m %b  %s \033[2m(%ds)\033[0m\n" "${bar_done}" "${success_label}" "${total_elapsed}" >&2
+            printf "%b  \033[1;32m✓\033[0m %b  %s \033[2m(%ds)\033[0m\n" "${prefix_clear}" "${bar_done}" "${success_label}" "${total_elapsed}" >&2
         fi
         rm -f "${log_file}"
         return 0
     else
-        local fail_pct=$(( base_pct + (tick * (is_tty && 100 || 300) * span / (est_secs * 1000)) ))
+        local fail_pct=$(( base_pct + (tick * 100 * span / (est_secs * 1000)) ))
         [ "${fail_pct}" -gt "${target_pct}" ] && fail_pct="${target_pct}"
         [ "${fail_pct}" -lt 1 ] && fail_pct=1
         local fail_filled_cnt=$(( fail_pct * bar_width / 100 ))
@@ -191,7 +210,7 @@ run_step() {
         local bar_fail
         bar_fail="$(printf "\033[2m[\033[0m\033[31m%s\033[0m\033[2m%s]\033[0m \033[1;31m%3d%%\033[0m" "${fail_filled}" "${fail_empty}" "${fail_pct}")"
 
-        printf "\r\033[K  \033[1;31m✖\033[0m %b  %s \033[1;31m(failed after %ds)\033[0m\n\n" "${bar_fail}" "${step_label}" "${total_elapsed}" >&2
+        printf "%b  \033[1;31m✖\033[0m %b  %s \033[1;31m(failed after %ds)\033[0m\n\n" "${prefix_clear}" "${bar_fail}" "${step_label}" "${total_elapsed}" >&2
         if [ -f "${log_file}" ]; then
             cat "${log_file}" >&2
             rm -f "${log_file}"
