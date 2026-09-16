@@ -11,7 +11,7 @@ The repository includes a complete, standalone sample implementation under `exam
 
 ```
 example/
-├── ios/                  # Isolated Swift Package
+├── apple/                # Isolated Swift Package
 │   ├── Package.swift     # Depends on local ../../ (GodotSwiftPlugin)
 │   ├── Sources/
 │   │   └── GodotExamplePlugin/

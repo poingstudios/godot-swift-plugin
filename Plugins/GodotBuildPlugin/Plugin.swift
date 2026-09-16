@@ -95,129 +95,64 @@ struct GodotBuildPlugin: CommandPlugin {
 
         try fileManager.createDirectory(atPath: resolvedOutputDir, withIntermediateDirectories: true)
 
-        print("\u{001B}[1mBuilding Godot Swift Plugin...\u{001B}[0m")
-        print("  \u{001B}[2m•\u{001B}[0m Plugin:        \(pluginName)")
-        print("  \u{001B}[2m•\u{001B}[0m Target:        \(target)")
-        print("  \u{001B}[2m•\u{001B}[0m Configuration: \(config)")
-        print("  \u{001B}[2m•\u{001B}[0m Output:        \(resolvedOutputDir)\n")
+        // 2. Delegate build to universal builder (build_plugin.sh)
+        var builderScript: String?
 
-        // 2. Build macOS dynamic library if requested
-        if target == "macos" || target == "all" {
-            print("\n==> [macOS] Building dynamic library via SwiftPM...")
-            let buildParams = PackageManager.BuildParameters(
-                configuration: config.lowercased() == "debug" ? .debug : .release,
-                logging: .concise
-            )
-
-            let result = try packageManager.build(
-                .product(pluginName),
-                parameters: buildParams
-            )
-
-            if !result.succeeded {
-                print("[ERROR] macOS compilation failed via SwiftPM PackageManager.")
-                Foundation.exit(1)
-            }
-
-            for artifact in result.builtArtifacts {
-                if artifact.path.extension == "dylib" {
-                    let destDylib = URL(fileURLWithPath: resolvedOutputDir).appendingPathComponent("lib\(pluginName).dylib").path
-                    if fileManager.fileExists(atPath: destDylib) {
-                        try? fileManager.removeItem(atPath: destDylib)
-                    }
-                    try fileManager.copyItem(atPath: artifact.path.string, toPath: destDylib)
-                    let chmodProc = Process()
-                    chmodProc.executableURL = URL(fileURLWithPath: "/bin/chmod")
-                    chmodProc.arguments = ["755", destDylib]
-                    try? chmodProc.run()
-                    chmodProc.waitUntilExit()
-                    print("==> [macOS] lib\(pluginName).dylib deployed to: \(destDylib)")
-                    break
-                }
+        for dep in context.package.dependencies {
+            let candidate = dep.package.directory.appending(subpath: "scripts/build_plugin.sh").string
+            if fileManager.fileExists(atPath: candidate) {
+                builderScript = candidate
+                break
             }
         }
 
-        // 3. Build iOS XCFramework if requested
-        if target == "ios" || target == "all" {
-            var builderScript: String?
+        if builderScript == nil {
+            let scriptCandidates = [
+                context.package.directory.appending(subpath: "../../scripts/build_plugin.sh").string,
+                context.package.directory.appending(subpath: "../../../scripts/build_plugin.sh").string,
+                context.package.directory.appending(subpath: "scripts/build_plugin.sh").string,
+                context.package.directory.appending(subpath: ".build/checkouts/godot-swift-plugin/scripts/build_plugin.sh").string
+            ]
 
-            for dep in context.package.dependencies {
-                let candidate = dep.package.directory.appending(subpath: "scripts/build_plugin.sh").string
+            for candidate in scriptCandidates {
                 if fileManager.fileExists(atPath: candidate) {
                     builderScript = candidate
                     break
                 }
             }
-
-            if builderScript == nil {
-                let scriptCandidates = [
-                    context.package.directory.appending(subpath: "../../scripts/build_plugin.sh").string,
-                    context.package.directory.appending(subpath: "../../../scripts/build_plugin.sh").string,
-                    context.package.directory.appending(subpath: "scripts/build_plugin.sh").string,
-                    context.package.directory.appending(subpath: ".build/checkouts/godot-swift-plugin/scripts/build_plugin.sh").string
-                ]
-
-                for candidate in scriptCandidates {
-                    if fileManager.fileExists(atPath: candidate) {
-                        builderScript = candidate
-                        break
-                    }
-                }
-            }
-
-            if builderScript == nil {
-                let cacheDir = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".cache/godot-swift").path
-                try? fileManager.createDirectory(atPath: cacheDir, withIntermediateDirectories: true)
-                let cachedScript = URL(fileURLWithPath: cacheDir).appendingPathComponent("build_plugin.sh").path
-                if !fileManager.fileExists(atPath: cachedScript) {
-                    print("==> Downloading universal builder script...")
-                    let curlProc = Process()
-                    curlProc.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
-                    curlProc.arguments = ["-fsSL", "https://raw.githubusercontent.com/poingstudios/godot-swift-plugin/master/scripts/build_plugin.sh", "-o", cachedScript]
-                    try curlProc.run()
-                    curlProc.waitUntilExit()
-                    let chmodProc = Process()
-                    chmodProc.executableURL = URL(fileURLWithPath: "/bin/chmod")
-                    chmodProc.arguments = ["+x", cachedScript]
-                    try? chmodProc.run()
-                    chmodProc.waitUntilExit()
-                }
-                builderScript = cachedScript
-            }
-
-            guard let finalBuilder = builderScript else {
-                print("[ERROR] Unable to locate or download build_plugin.sh for iOS packaging.")
-                Foundation.exit(1)
-            }
-
-            var builderArgs = [
-                finalBuilder,
-                "--package-dir", packageDir,
-                "--name", pluginName,
-                "--output-dir", resolvedOutputDir,
-                "--target", "ios",
-                "--configuration", config,
-                "--quiet-header"
-            ]
-            if clean {
-                builderArgs.append("--clean")
-            }
-            builderArgs.append(contentsOf: passthroughArgs)
-
-            let iosProc = Process()
-            iosProc.executableURL = URL(fileURLWithPath: "/bin/bash")
-            iosProc.arguments = builderArgs
-            iosProc.standardOutput = FileHandle.standardOutput
-            iosProc.standardError = FileHandle.standardError
-            iosProc.standardInput = FileHandle.standardInput
-            try iosProc.run()
-            iosProc.waitUntilExit()
-
-            if iosProc.terminationStatus != 0 {
-                Foundation.exit(iosProc.terminationStatus)
-            }
         }
 
-        print("\n  \u{001B}[1;32m✓\u{001B}[0m Build completed successfully (\(target))\n")
+        guard let finalBuilder = builderScript else {
+            print("[ERROR] Unable to locate scripts/build_plugin.sh from package dependencies or repository hierarchy.")
+            Foundation.exit(1)
+        }
+
+
+        var builderArgs = [
+            finalBuilder,
+            "--package-dir", packageDir,
+            "--name", pluginName,
+            "--output-dir", resolvedOutputDir,
+            "--target", target,
+            "--configuration", config
+        ]
+        if clean {
+            builderArgs.append("--clean")
+        }
+        builderArgs.append(contentsOf: passthroughArgs)
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/bash")
+        proc.arguments = builderArgs
+        proc.standardOutput = FileHandle.standardOutput
+        proc.standardError = FileHandle.standardError
+        proc.standardInput = FileHandle.standardInput
+        try proc.run()
+        proc.waitUntilExit()
+
+        if proc.terminationStatus != 0 {
+            Foundation.exit(proc.terminationStatus)
+        }
     }
 }
+
