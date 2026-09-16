@@ -20,4 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-typedef int make_iso_compilers_happy;
+// Provide an exported symbol so static library archivers do not warn about empty object files.
+extern int godot_cgdextension_interface_anchor;
+int godot_cgdextension_interface_anchor = 0;

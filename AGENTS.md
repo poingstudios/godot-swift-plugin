@@ -6,7 +6,7 @@ AI assistant context for the godot-swift-plugin repository. Read this before mak
 
 ## Project Overview
 
-**Godot Swift Plugin** is an official-grade, lightweight toolkit for developing native Godot iOS/Apple plugins using pure Swift. It acts as the iOS counterpart to Android's `GodotPlugin` architecture, enabling developers to write native Apple plugins with zero engine bloat and fast compile times via Swift Package Manager (SPM).
+**Godot Swift Plugin** is a lightweight toolkit for developing native Godot iOS/Apple plugins using pure Swift. It acts as the iOS counterpart to Android's `GodotPlugin` architecture, enabling developers to write native Apple plugins with zero engine bloat and fast compile times via Swift Package Manager (SPM).
 
 - **Supported Platforms:** iOS 14.0+, macOS 11.0+
 - **Primary Language:** Swift 5.9+ / Swift 6.0
@@ -43,7 +43,7 @@ godot-swift-plugin/
 │       └── stub_ios.xcframework # Static arm64 + universal simulator
 ├── scripts/
 │   ├── build_plugin.sh         # Universal plugin builder (macOS dylib & iOS XCFramework)
-│   ├── create_plugin.sh        # Plugin scaffolding generator (creates new plugin template)
+│   ├── create_plugin.sh        # Plugin project generator (creates new plugin template)
 │   ├── generate_stubs.sh       # Multi-platform GDExtension stub compiler
 │   ├── test_local.sh           # Test script
 │   └── sync_headers.sh         # Header sync script from godot-cpp
@@ -52,9 +52,9 @@ godot-swift-plugin/
 
 ---
 
-## Build & Scaffolding Commands
+## Build & Creation Commands
 
-### Scaffold a New Plugin
+### Create a New Plugin
 Interactive wizard:
 ```bash
 ./scripts/create_plugin.sh

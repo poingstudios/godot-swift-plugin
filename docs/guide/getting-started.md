@@ -12,7 +12,7 @@ curl -fsSL https://raw.githubusercontent.com/poingstudios/godot-swift-plugin/mas
 
 *(Or from a local clone: `./scripts/create_plugin.sh --name GodotGameCenter`)*
 
-This scaffolds:
+This creates:
 - **`platforms/ios/`**: Swift package configured with `GodotSwiftPlugin`, starter Swift class, and unit tests.
 - **`platforms/godot_editor/addons/<name>/`**: Complete addon layout with `.gdextension`, `plugin.cfg`, `plugin.gd`, singleton wrapper, and `bin/stubs/` precompiled stubs.
 - **`scripts/build_local.sh`**: Central build script detecting host architecture and building binaries.
@@ -28,7 +28,7 @@ cd GodotGameCenter
 
 ## Option B: Pure Swift CLI (`swift package init`)
 
-If you prefer building from scratch without scaffolding scripts:
+If you prefer setting up manually from scratch:
 
 ```bash
 # 1. Create a bare Swift package:

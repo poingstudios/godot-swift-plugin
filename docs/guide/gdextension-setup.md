@@ -83,4 +83,4 @@ Precompiled stubs in `bin/stubs/` provide ultra-lightweight no-op C entry points
 - **Android**: `libstub_android_arm64.so` & `libstub_android_x86_64.so`
 - **iOS**: `stub_ios.xcframework` (Universal arm64 device + universal simulator)
 
-Scaffolded plugins automatically configure these stubs so team members on any operating system and CPU architecture (Intel, AMD, Apple Silicon, Qualcomm Snapdragon, ARM Linux) can work seamlessly without warnings.
+Generated plugins automatically configure these stubs so team members on any operating system and CPU architecture (Intel, AMD, Apple Silicon, Qualcomm Snapdragon, ARM Linux) can work seamlessly without warnings.

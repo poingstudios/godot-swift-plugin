@@ -26,28 +26,106 @@ set -euo pipefail
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
+BOLD='\033[1m'
+DIM='\033[2m'
 NC='\033[0m'
+
+print_welcome_banner() {
+    local C="${CYAN}"
+    echo -e "\n${C}╭──────────────────────────────────────────────────────────────────────────────╮${NC}"
+    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
+    echo -e "${C}│${NC}                              ${BOLD}Godot Swift Plugin${NC}                              ${C}│${NC}"
+    echo -e "${C}│${NC}             ${DIM}Build native Apple plugins for Godot with pure Swift${NC}             ${C}│${NC}"
+    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
+    echo -e "${C}├──────────────────────────────────────────────────────────────────────────────┤${NC}"
+    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
+    echo -e "${C}│${NC}  ⭐ Star on GitHub:     ${CYAN}https://github.com/poingstudios/godot-swift-plugin${NC}   ${C}│${NC}"
+    echo -e "${C}│${NC}  💖 Support on Patreon: ${CYAN}https://www.patreon.com/c/poingstudios${NC}               ${C}│${NC}"
+    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
+    echo -e "${C}╰──────────────────────────────────────────────────────────────────────────────╯${NC}\n"
+}
+
+print_finish_banner() {
+    local C="${GREEN}"
+    echo -e "\n${C}╭──────────────────────────────────────────────────────────────────────────────╮${NC}"
+    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
+    echo -e "${C}│${NC}                              ${BOLD}🎉 Happy Game Dev!${NC}                              ${C}│${NC}"
+    echo -e "${C}│${NC}                ${DIM}Thank you for building with Godot Swift Plugin${NC}                ${C}│${NC}"
+    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
+    echo -e "${C}├──────────────────────────────────────────────────────────────────────────────┤${NC}"
+    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
+    echo -e "${C}│${NC}  ⭐ Star on GitHub:     ${CYAN}https://github.com/poingstudios/godot-swift-plugin${NC}   ${C}│${NC}"
+    echo -e "${C}│${NC}  💖 Support on Patreon: ${CYAN}https://www.patreon.com/c/poingstudios${NC}               ${C}│${NC}"
+    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
+    echo -e "${C}╰──────────────────────────────────────────────────────────────────────────────╯${NC}\n"
+}
+
+run_with_spinner() {
+    local message="$1"
+    shift
+    local log_file
+    log_file="$(mktemp /tmp/gsp_build_XXXXXX)"
+
+    local spinner_chars=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+    local delay=0.08
+
+    "$@" > "${log_file}" 2>&1 &
+    local pid=$!
+
+    if [ -t 2 ]; then
+        printf "\033[?25l" >&2
+        local i=0
+        while kill -0 "${pid}" 2>/dev/null; do
+            local spin="${spinner_chars[i % ${#spinner_chars[@]}]}"
+            printf "\r  \033[1;36m%s\033[0m %s" "${spin}" "${message}" >&2
+            i=$((i + 1))
+            sleep "${delay}"
+        done
+        printf "\033[?25h" >&2
+    fi
+
+    wait "${pid}"
+    local exit_code=$?
+
+    if [ "${exit_code}" -eq 0 ]; then
+        if [ -t 2 ]; then
+            printf "\r  \033[1;32m✓\033[0m %s\n" "${message}" >&2
+        else
+            printf "  \033[1;32m✓\033[0m %s\n" "${message}" >&2
+        fi
+        rm -f "${log_file}"
+        return 0
+    else
+        if [ -t 2 ]; then
+            printf "\r  \033[1;31m✖\033[0m %s (failed)\n\n" "${message}" >&2
+        else
+            printf "  \033[1;31m✖\033[0m %s (failed)\n\n" "${message}" >&2
+        fi
+        cat "${log_file}" >&2
+        rm -f "${log_file}"
+        return "${exit_code}"
+    fi
+}
 
 on_error() {
     local exit_code="$1"
     local line_no="$2"
-    echo -e "\n${RED}================================================================${NC}" >&2
-    echo -e "${RED}[ERROR] create_plugin.sh failed at line ${line_no} (exit code ${exit_code})${NC}" >&2
-    echo -e "${RED}================================================================${NC}\n" >&2
+    echo -e "\n${RED}✖ Error:${NC} create_plugin.sh failed at line ${line_no} (exit code ${exit_code})\n" >&2
     exit "${exit_code}"
 }
 trap 'on_error $? $LINENO' ERR
 
 show_help() {
+    print_welcome_banner
     echo "Usage: ./scripts/create_plugin.sh --name <PluginName> [options]"
     echo ""
-    echo "Scaffolds a new Godot Swift plugin for iOS and macOS."
+    echo "Creates a new Godot Swift plugin project for iOS and macOS."
     echo ""
     echo "Options:"
     echo "  -n, --name <PluginName>        Plugin name in PascalCase (e.g. GodotGameCenter)"
     echo "  -o, --output-dir <path>        Output directory (default: ./<PluginName>)"
-    echo "      --platforms <all|ios|macos> Target platforms: 'all' (iOS+macOS), 'ios' (iOS only), or 'macos' (macOS only) (default: all)"
-    echo "      --build                    Compile initial binaries after scaffolding"
+    echo "      --platforms <ios|all|macos> Target platforms: 'ios' (iOS only), 'all' (iOS+macOS), or 'macos' (macOS only) (default: ios)"
+    echo "      --build                    Compile initial binaries after creating the project"
     echo "      --framework-path <path>    Local relative or absolute path to godot-swift-plugin"
     echo "  -h, --help                     Show this help message"
 }
@@ -56,7 +134,7 @@ PLUGIN_NAME=""
 OUTPUT_DIR=""
 GODOT_VERSION="4.6"
 FRAMEWORK_PATH=""
-PLATFORMS_CHOICE="all"
+PLATFORMS_CHOICE="ios"
 RUN_BUILD=false
 
 while [[ $# -gt 0 ]]; do
@@ -106,15 +184,15 @@ prompt_input() {
     local user_input=""
 
     if [ -n "${default_val}" ]; then
-        printf "%b [%s]: %b" "${prompt_msg}" "${default_val}" "${NC}" >&2
+        printf "%b %b[%s]%b: " "${prompt_msg}" "${DIM}" "${default_val}" "${NC}" >&2
     else
-        printf "%b: %b" "${prompt_msg}" "${NC}" >&2
+        printf "%b: " "${prompt_msg}" >&2
     fi
 
-    if [ -e /dev/tty ]; then
-        read -r user_input < /dev/tty
-    elif [ -t 0 ]; then
-        read -r user_input
+    if [ -t 0 ]; then
+        read -e -r user_input
+    elif [ -e /dev/tty ]; then
+        read -e -r user_input < /dev/tty
     else
         user_input=""
     fi
@@ -126,46 +204,132 @@ prompt_input() {
     printf -v "${result_var}" "%s" "${user_input}"
 }
 
+prompt_select() {
+    local prompt_msg="$1"
+    local default_idx="$2"
+    local result_var="$3"
+    shift 3
+    local options=("$@")
+    local selected="${default_idx}"
+    local total=${#options[@]}
+
+    local tty_in="/dev/tty"
+    if [ ! -e /dev/tty ] || [ ! -t 0 ]; then
+        printf -v "${result_var}" "%s" "${selected}"
+        return 0
+    fi
+
+    printf "\n%b:\n" "${prompt_msg}" >&2
+    printf "\033[?25l" >&2
+
+    local first_render=true
+    while true; do
+        if [ "${first_render}" = false ]; then
+            for ((l=0; l<total; l++)); do
+                printf "\033[1A\033[2K" >&2
+            done
+        else
+            first_render=false
+        fi
+
+        for i in "${!options[@]}"; do
+            if [ "$i" -eq "$selected" ]; then
+                printf "  \033[1;36m❯ %s\033[0m\n" "${options[$i]}" >&2
+            else
+                printf "    \033[2m%s\033[0m\n" "${options[$i]}" >&2
+            fi
+        done
+
+        local key=""
+        IFS= read -rsn1 key < "${tty_in}" || key=""
+        if [ "$key" = $'\x1b' ]; then
+            local rest=""
+            read -rsn2 -t 1 rest < "${tty_in}" || rest=""
+            key+="$rest"
+        fi
+
+        case "$key" in
+            $'\x1b[A'|[kK])
+                ((selected--)) || true
+                if [ "$selected" -lt 0 ]; then
+                    selected=$((total - 1))
+                fi
+                ;;
+            $'\x1b[B'|[jJ])
+                ((selected++)) || true
+                if [ "$selected" -ge "$total" ]; then
+                    selected=0
+                fi
+                ;;
+            "")
+                break
+                ;;
+            [1-9])
+                local opt_idx=$((key - 1))
+                if [ "$opt_idx" -ge 0 ] && [ "$opt_idx" -lt "$total" ]; then
+                    selected=$opt_idx
+                    break
+                fi
+                ;;
+        esac
+    done
+
+    printf "\033[?25h" >&2
+
+    for ((l=0; l<total; l++)); do
+        printf "\033[1A\033[2K" >&2
+    done
+    printf "  \033[1;32m✓ %s\033[0m\n" "${options[$selected]}" >&2
+
+    printf -v "${result_var}" "%s" "${selected}"
+}
+
 if [ -z "${PLUGIN_NAME}" ]; then
     if [ -e /dev/tty ] || [ -t 0 ]; then
-        echo -e "\n${CYAN}╭─────────────────────────────────────────────────────────────╮${NC}"
-        echo -e "${CYAN}│            Godot Swift Plugin — Project Wizard              │${NC}"
-        echo -e "${CYAN}│      Create official-grade Godot plugins with pure Swift    │${NC}"
-        echo -e "${CYAN}╰─────────────────────────────────────────────────────────────╯${NC}\n"
+        print_welcome_banner
 
         while true; do
             prompt_input "${CYAN}? Plugin Name in PascalCase (e.g. GodotGameCenter)${NC}" "" PLUGIN_NAME
             if [[ "${PLUGIN_NAME}" =~ ^[A-Z][A-Za-z0-9_]*$ ]]; then
                 break
             else
-                echo -e "${RED}[!] Invalid name. Plugin name must start with a capital letter (PascalCase).${NC}" >&2
+                echo -e "  ${RED}✖ Invalid name. Plugin name must start with a capital letter (PascalCase).${NC}" >&2
             fi
         done
 
-        if [ -z "${OUTPUT_DIR}" ]; then
+        while true; do
             prompt_input "${CYAN}? Output directory${NC}" "./${PLUGIN_NAME}" OUTPUT_DIR
-        fi
+            if [ -d "${OUTPUT_DIR}" ] && [ -n "$(ls -A "${OUTPUT_DIR}" 2>/dev/null)" ]; then
+                echo -e "  ${RED}✖ Directory '${OUTPUT_DIR}' already exists and is not empty. Please choose another path.${NC}" >&2
+                OUTPUT_DIR=""
+            else
+                break
+            fi
+        done
 
-        echo -e "\n${CYAN}? Supported platforms:${NC}"
-        echo -e "  1) iOS + macOS ${GREEN}(Recommended for in-editor testing)${NC}"
-        echo -e "  2) iOS only"
-        echo -e "  3) macOS only"
-        prompt_input "${CYAN}  Select platform option${NC}" "1" PLAT_OPT
-        if [ "${PLAT_OPT}" = "2" ]; then
-            PLATFORMS_CHOICE="ios"
-        elif [ "${PLAT_OPT}" = "3" ]; then
+        prompt_select "${CYAN}? Supported platforms${NC}" 0 PLAT_IDX \
+            "iOS only" \
+            "iOS + macOS" \
+            "macOS only"
+
+        if [ "${PLAT_IDX}" = "1" ]; then
+            PLATFORMS_CHOICE="all"
+        elif [ "${PLAT_IDX}" = "2" ]; then
             PLATFORMS_CHOICE="macos"
         else
-            PLATFORMS_CHOICE="all"
+            PLATFORMS_CHOICE="ios"
         fi
 
-        prompt_input "\n${CYAN}? Compile initial binaries now? (Y/n)${NC}" "Y" BUILD_OPT
-        if [[ "${BUILD_OPT}" =~ ^[Yy]$ ]]; then
+        prompt_select "${CYAN}? Compile initial binaries now?${NC}" 0 BUILD_IDX \
+            "Yes" \
+            "No"
+
+        if [ "${BUILD_IDX}" = "0" ]; then
             RUN_BUILD=true
         fi
         echo ""
     else
-        echo -e "${RED}[ERROR] Plugin name is required (--name <PluginName>)${NC}" >&2
+        echo -e "${RED}✖ Error:${NC} Plugin name is required (--name <PluginName>)\n" >&2
         show_help
         exit 1
     fi
@@ -182,24 +346,37 @@ print(re.sub('([a-z0-9])([A-Z])', r'\1_\2', s).lower())
 if [ -z "${OUTPUT_DIR}" ]; then
     OUTPUT_DIR="$(pwd)/${PLUGIN_NAME}"
 fi
+
+if [ -d "${OUTPUT_DIR}" ] && [ -n "$(ls -A "${OUTPUT_DIR}" 2>/dev/null)" ]; then
+    echo -e "${RED}✖ Error:${NC} Destination directory '${OUTPUT_DIR}' already exists and is not empty.\n" >&2
+    exit 1
+fi
+
 mkdir -p "${OUTPUT_DIR}"
 OUTPUT_DIR="$(cd "${OUTPUT_DIR}" && pwd)"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-echo -e "${CYAN}================================================================${NC}"
-echo -e "${CYAN}==> Scaffolding Godot Swift Plugin${NC}"
-echo -e "${CYAN}    Plugin Name:   ${GREEN}${PLUGIN_NAME}${NC}"
-echo -e "${CYAN}    Addon Slug:    ${GREEN}${SNAKE_NAME}${NC}"
-echo -e "${CYAN}    Output Dir:    ${OUTPUT_DIR}${NC}"
-echo -e "${CYAN}    Godot Version: ${GODOT_VERSION}+${NC}"
-echo -e "${CYAN}================================================================${NC}"
+PLATFORMS_LABEL="iOS only"
+if [ "${PLATFORMS_CHOICE}" = "all" ]; then
+    PLATFORMS_LABEL="iOS + macOS"
+elif [ "${PLATFORMS_CHOICE}" = "macos" ]; then
+    PLATFORMS_LABEL="macOS only"
+fi
+
+echo -e "${BOLD}Creating Godot Swift Plugin...${NC}"
+echo -e "  ${DIM}•${NC} Plugin Name:   ${GREEN}${PLUGIN_NAME}${NC}"
+echo -e "  ${DIM}•${NC} Addon Slug:    ${GREEN}${SNAKE_NAME}${NC}"
+echo -e "  ${DIM}•${NC} Directory:     ${OUTPUT_DIR}"
+echo -e "  ${DIM}•${NC} Platforms:     ${PLATFORMS_LABEL}"
+echo -e "  ${DIM}•${NC} Godot Version: ${GODOT_VERSION}+"
+echo ""
 
 # Setup Dependency string
 if [ -n "${FRAMEWORK_PATH}" ]; then
     DEP_LINE=".package(path: \"${FRAMEWORK_PATH}\")"
-elif [[ "${OUTPUT_DIR}" == "${REPO_ROOT}/"* ]] && [ -d "${REPO_ROOT}/Sources/GodotSwiftPlugin" ]; then
+elif [ -d "${REPO_ROOT}/Sources/GodotSwiftPlugin" ]; then
     REL_PATH="$(python3 -c "import os.path; print(os.path.relpath(os.path.realpath('${REPO_ROOT}'), os.path.realpath('${OUTPUT_DIR}/platforms/ios')))")"
     DEP_LINE=".package(path: \"${REL_PATH}\")"
 else
@@ -217,26 +394,52 @@ mkdir -p "${OUTPUT_DIR}/scripts"
 # Copy GDExtension stubs for unsupported platforms
 STUBS_SRC="${REPO_ROOT}/templates/stubs"
 STUBS_DEST="${OUTPUT_DIR}/platforms/godot_editor/addons/${SNAKE_NAME}/bin/stubs"
+
+COMMON_STUBS=(
+    "stub_windows.dll"
+    "stub_windows_x86_64.dll"
+    "stub_windows_arm64.dll"
+    "libstub_linux.so"
+    "libstub_linux_x86_64.so"
+    "libstub_linux_arm64.so"
+    "libstub_android.so"
+    "libstub_android_arm64.so"
+    "libstub_android_x86_64.so"
+)
+
+# macOS stub is only needed if the plugin is iOS-only
+if [ "${PLATFORMS_CHOICE}" = "ios" ]; then
+    COMMON_STUBS+=("libstub_macos.dylib")
+fi
+
 if [ -d "${STUBS_SRC}" ]; then
-    cp -R "${STUBS_SRC}/"* "${STUBS_DEST}/"
+    for stub_file in "${COMMON_STUBS[@]}"; do
+        if [ -f "${STUBS_SRC}/${stub_file}" ]; then
+            cp "${STUBS_SRC}/${stub_file}" "${STUBS_DEST}/${stub_file}"
+        fi
+    done
+    # iOS stub is only needed if the plugin is macOS-only
+    if [ "${PLATFORMS_CHOICE}" = "macos" ] && [ -d "${STUBS_SRC}/stub_ios.xcframework" ]; then
+        cp -R "${STUBS_SRC}/stub_ios.xcframework" "${STUBS_DEST}/"
+    fi
 else
-    echo -e "${CYAN}==> Fetching precompiled GDExtension stubs from GitHub...${NC}"
+    echo -e "  ${CYAN}↓${NC} Fetching precompiled GDExtension stubs from GitHub..."
     RAW_BASE="https://raw.githubusercontent.com/poingstudios/godot-swift-plugin/master/templates/stubs"
-    curl -fsSL "${RAW_BASE}/libstub_macos.dylib" -o "${STUBS_DEST}/libstub_macos.dylib" 2>/dev/null || true
-    curl -fsSL "${RAW_BASE}/stub_windows.dll" -o "${STUBS_DEST}/stub_windows.dll" 2>/dev/null || true
-    curl -fsSL "${RAW_BASE}/libstub_linux.so" -o "${STUBS_DEST}/libstub_linux.so" 2>/dev/null || true
-    curl -fsSL "${RAW_BASE}/libstub_android.so" -o "${STUBS_DEST}/libstub_android.so" 2>/dev/null || true
-    mkdir -p "${STUBS_DEST}/stub_ios.xcframework/ios-arm64"
-    mkdir -p "${STUBS_DEST}/stub_ios.xcframework/ios-arm64_x86_64-simulator"
-    curl -fsSL "${RAW_BASE}/stub_ios.xcframework/Info.plist" -o "${STUBS_DEST}/stub_ios.xcframework/Info.plist" 2>/dev/null || true
-    curl -fsSL "${RAW_BASE}/stub_ios.xcframework/ios-arm64/libstub_ios_device.a" -o "${STUBS_DEST}/stub_ios.xcframework/ios-arm64/libstub_ios_device.a" 2>/dev/null || true
-    curl -fsSL "${RAW_BASE}/stub_ios.xcframework/ios-arm64_x86_64-simulator/libstub_ios_sim.a" -o "${STUBS_DEST}/stub_ios.xcframework/ios-arm64_x86_64-simulator/libstub_ios_sim.a" 2>/dev/null || true
+    for stub_file in "${COMMON_STUBS[@]}"; do
+        curl -fsSL "${RAW_BASE}/${stub_file}" -o "${STUBS_DEST}/${stub_file}" 2>/dev/null || true
+    done
+    if [ "${PLATFORMS_CHOICE}" = "macos" ]; then
+        mkdir -p "${STUBS_DEST}/stub_ios.xcframework/ios-arm64"
+        mkdir -p "${STUBS_DEST}/stub_ios.xcframework/ios-arm64_x86_64-simulator"
+        curl -fsSL "${RAW_BASE}/stub_ios.xcframework/Info.plist" -o "${STUBS_DEST}/stub_ios.xcframework/Info.plist" 2>/dev/null || true
+        curl -fsSL "${RAW_BASE}/stub_ios.xcframework/ios-arm64/libstub_ios_device.a" -o "${STUBS_DEST}/stub_ios.xcframework/ios-arm64/libstub_ios_device.a" 2>/dev/null || true
+        curl -fsSL "${RAW_BASE}/stub_ios.xcframework/ios-arm64_x86_64-simulator/libstub_ios_sim.a" -o "${STUBS_DEST}/stub_ios.xcframework/ios-arm64_x86_64-simulator/libstub_ios_sim.a" 2>/dev/null || true
+    fi
 fi
 
 # 1. Package.swift
 cat <<EOF > "${OUTPUT_DIR}/platforms/ios/Package.swift"
 // swift-tools-version: 5.9
-// MIT License
 
 import PackageDescription
 
@@ -280,8 +483,6 @@ EOF
 
 # 2. Plugin Swift Source
 cat <<EOF > "${OUTPUT_DIR}/platforms/ios/Sources/${PLUGIN_NAME}/${PLUGIN_NAME}.swift"
-// MIT License
-
 import Foundation
 import GodotSwiftPlugin
 
@@ -307,8 +508,6 @@ EOF
 
 # 3. Unit Test Source
 cat <<EOF > "${OUTPUT_DIR}/platforms/ios/Tests/${PLUGIN_NAME}Tests/${PLUGIN_NAME}Tests.swift"
-// MIT License
-
 import XCTest
 @testable import ${PLUGIN_NAME}
 
@@ -322,8 +521,6 @@ EOF
 
 # 4. export_plugin.gd
 cat <<EOF > "${OUTPUT_DIR}/platforms/godot_editor/addons/${SNAKE_NAME}/internal/export_plugin.gd"
-# MIT License
-
 extends EditorExportPlugin
 
 const PLUGIN_NAME := "${PLUGIN_NAME}"
@@ -354,20 +551,19 @@ func _add_linker_flags(flags: String) -> void:
 EOF
 
 # 5. plugin.cfg
+AUTHOR_NAME="\$(git config user.name 2>/dev/null || echo "")"
 cat <<EOF > "${OUTPUT_DIR}/platforms/godot_editor/addons/${SNAKE_NAME}/plugin.cfg"
 [plugin]
 
 name="${PLUGIN_NAME}"
 description="${PLUGIN_NAME} iOS & macOS plugin for Godot."
-author="Poing Studios"
+author="\${AUTHOR_NAME}"
 version="1.0.0"
 script="plugin.gd"
 EOF
 
 # 6. plugin.gd
 cat <<EOF > "${OUTPUT_DIR}/platforms/godot_editor/addons/${SNAKE_NAME}/plugin.gd"
-# MIT License
-
 @tool
 extends EditorPlugin
 
@@ -388,8 +584,6 @@ EOF
 
 # 7. <slug>.gd (GDScript public API)
 cat <<EOF > "${OUTPUT_DIR}/platforms/godot_editor/addons/${SNAKE_NAME}/${SNAKE_NAME}.gd"
-# MIT License
-
 class_name ${PLUGIN_NAME}
 extends RefCounted
 
@@ -407,7 +601,7 @@ static func get_singleton() -> Object:
 
 static func hello(p_name: String) -> String:
 	var s := get_singleton()
-	if s and s.has_method("hello"):
+	if s:
 		return s.hello(p_name)
 	return "Plugin ${PLUGIN_NAME} not available on this platform"
 EOF
@@ -486,8 +680,6 @@ EOF
 # 10. Sample Scene & Script
 cat <<EOF > "${OUTPUT_DIR}/platforms/godot_editor/sample/sample.gd"
 extends Control
-
-const ${PLUGIN_NAME} := preload("res://addons/${SNAKE_NAME}/${SNAKE_NAME}.gd")
 
 
 func _ready() -> void:
@@ -568,30 +760,67 @@ EOF
 cat <<EOF > "${OUTPUT_DIR}/README.md"
 # ${PLUGIN_NAME}
 
-Official-grade Godot 4.x plugin for iOS and macOS, powered by [Godot Swift Plugin](https://github.com/poingstudios/godot-swift-plugin).
+Godot 4.x plugin for iOS and macOS, powered by [Godot Swift Plugin](https://github.com/poingstudios/godot-swift-plugin).
 
-## Quickstart
+## Getting Started
 
-### 1. Build Binaries
+### 1. Run in Godot Editor
+1. Open **Godot Engine ${GODOT_VERSION}+**.
+2. Import and open \`platforms/godot_editor\`.
+3. Press **F5** to run the sample scene (\`sample/sample.tscn\`).
+
+### 2. Write Your Swift Code
+- Native Swift code is located at:
+  \`platforms/ios/Sources/${PLUGIN_NAME}/${PLUGIN_NAME}.swift\`
+
+### 3. Rebuild Binaries
+Whenever you modify your Swift code, recompile:
 \`\`\`bash
+# Build for iOS only
+./scripts/build_local.sh ios
+
+# Build for all platforms (iOS + macOS)
 ./scripts/build_local.sh all
 \`\`\`
 
-### 2. Run Unit Tests
+### 4. Run Unit Tests
 \`\`\`bash
 ./scripts/test_local.sh
 \`\`\`
+
+### 5. Export to iOS (Xcode)
+1. In Godot, go to **Project > Export...**
+2. Add an **iOS** preset and click **Export Project**.
+3. Open the exported \`.xcodeproj\` in **Xcode** and run on your iOS Device or Simulator.
 EOF
 
-echo -e "\n${GREEN}================================================================${NC}"
-echo -e "${GREEN}==> Plugin '${PLUGIN_NAME}' successfully scaffolded at:${NC}"
-echo -e "${GREEN}    ${OUTPUT_DIR}${NC}"
-echo -e "${GREEN}================================================================${NC}\n"
+echo -e "  ${GREEN}✓${NC} Project files generated successfully\n"
 
 if [ "${RUN_BUILD}" = true ]; then
-    echo -e "${CYAN}==> Running initial compilation (${PLATFORMS_CHOICE})...${NC}"
     (cd "${OUTPUT_DIR}" && ./scripts/build_local.sh "${PLATFORMS_CHOICE}")
-else
-    echo -e "${GREEN}==> To compile manually:${NC}"
-    echo -e "${GREEN}    cd ${OUTPUT_DIR} && ./scripts/build_local.sh all${NC}\n"
 fi
+
+echo -e "\n${BOLD}Next steps:${NC}"
+echo -e "  1. ${CYAN}Navigate to your project:${NC}"
+echo -e "     cd ${OUTPUT_DIR}\n"
+if [ "${RUN_BUILD}" != true ]; then
+    echo -e "  2. ${CYAN}Compile plugin binaries:${NC}"
+    echo -e "     ./scripts/build_local.sh ${PLATFORMS_CHOICE}\n"
+    echo -e "  3. ${CYAN}Open in Godot Engine (${GODOT_VERSION}+):${NC}"
+    echo -e "     Open 'platforms/godot_editor' and press ${BOLD}F5${NC} to run the sample scene\n"
+    echo -e "  4. ${CYAN}Write your Swift code:${NC}"
+    echo -e "     Edit 'platforms/ios/Sources/${PLUGIN_NAME}/${PLUGIN_NAME}.swift'\n"
+    echo -e "  5. ${CYAN}Run Swift unit tests:${NC}"
+    echo -e "     ./scripts/test_local.sh\n"
+else
+    echo -e "  2. ${CYAN}Open in Godot Engine (${GODOT_VERSION}+):${NC}"
+    echo -e "     Open 'platforms/godot_editor' and press ${BOLD}F5${NC} to run the sample scene\n"
+    echo -e "  3. ${CYAN}Write your Swift code:${NC}"
+    echo -e "     Edit 'platforms/ios/Sources/${PLUGIN_NAME}/${PLUGIN_NAME}.swift'\n"
+    echo -e "  4. ${CYAN}Rebuild binaries anytime:${NC}"
+    echo -e "     ./scripts/build_local.sh ${PLATFORMS_CHOICE}\n"
+    echo -e "  5. ${CYAN}Run Swift unit tests:${NC}"
+    echo -e "     ./scripts/test_local.sh\n"
+fi
+
+print_finish_banner

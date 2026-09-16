@@ -31,12 +31,14 @@ GODOT_BIN="${GODOT_BIN:-}"
 if [ -z "${GODOT_BIN}" ]; then
     if command -v godot &>/dev/null; then
         GODOT_BIN="godot"
-    elif [ -f "/Volumes/Mac500GB/Downloads/godot472mono.app/Contents/MacOS/Godot" ]; then
-        GODOT_BIN="/Volumes/Mac500GB/Downloads/godot472mono.app/Contents/MacOS/Godot"
     elif [ -f "/Applications/Godot.app/Contents/MacOS/Godot" ]; then
         GODOT_BIN="/Applications/Godot.app/Contents/MacOS/Godot"
+    elif [ -f "/Applications/Godot_mono.app/Contents/MacOS/Godot" ]; then
+        GODOT_BIN="/Applications/Godot_mono.app/Contents/MacOS/Godot"
+    elif [ -f "${HOME}/Applications/Godot.app/Contents/MacOS/Godot" ]; then
+        GODOT_BIN="${HOME}/Applications/Godot.app/Contents/MacOS/Godot"
     else
-        echo "Error: Godot executable not found. Please set GODOT_BIN environment variable." >&2
+        echo "Error: Godot executable not found. Please set GODOT_BIN environment variable or install Godot to /Applications." >&2
         exit 1
     fi
 fi

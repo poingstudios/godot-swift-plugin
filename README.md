@@ -1,6 +1,6 @@
 # Godot Swift Plugin
 
-Lightweight, official-grade toolkit for developing native Godot iOS/Apple plugins using pure Swift.
+Lightweight toolkit for developing native Godot iOS/Apple plugins using pure Swift.
 
 ## Overview
 
@@ -92,7 +92,7 @@ Target options: `all` (macOS dylib + iOS XCFramework), `macos`, or `ios`.
 
 ## Precompiled Stubs
 
-All scaffolded plugins include lightweight precompiled GDExtension stubs in `addons/<plugin>/bin/stubs/` (macOS, Windows, Linux, Android, and iOS), silencing Godot's `No GDExtension library found` notice when running the editor on any desktop OS.
+All generated plugins include lightweight precompiled GDExtension stubs in `addons/<plugin>/bin/stubs/` (macOS, Windows, Linux, Android, and iOS), silencing Godot's `No GDExtension library found` notice when running the editor on any desktop OS.
 
 To recompile stubs locally:
 

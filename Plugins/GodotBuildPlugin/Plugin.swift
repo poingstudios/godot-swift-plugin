@@ -64,14 +64,6 @@ struct GodotBuildPlugin: CommandPlugin {
             }
         }
 
-        print("================================================================")
-        print("==> Godot Swift Package Plugin")
-        print("    Plugin Name:   \(pluginName)")
-        print("    Package Dir:   \(packageDir)")
-        print("    Target:        \(target)")
-        print("    Configuration: \(config)")
-        print("================================================================")
-
         // 1. Resolve Output Directory (addons/<slug>/bin)
         var outputDir: String?
         let searchCandidates = [
@@ -102,6 +94,12 @@ struct GodotBuildPlugin: CommandPlugin {
         }
 
         try fileManager.createDirectory(atPath: resolvedOutputDir, withIntermediateDirectories: true)
+
+        print("\u{001B}[1mBuilding Godot Swift Plugin...\u{001B}[0m")
+        print("  \u{001B}[2m•\u{001B}[0m Plugin:        \(pluginName)")
+        print("  \u{001B}[2m•\u{001B}[0m Target:        \(target)")
+        print("  \u{001B}[2m•\u{001B}[0m Configuration: \(config)")
+        print("  \u{001B}[2m•\u{001B}[0m Output:        \(resolvedOutputDir)\n")
 
         // 2. Build macOS dynamic library if requested
         if target == "macos" || target == "all" {
@@ -198,7 +196,8 @@ struct GodotBuildPlugin: CommandPlugin {
                 "--name", pluginName,
                 "--output-dir", resolvedOutputDir,
                 "--target", "ios",
-                "--configuration", config
+                "--configuration", config,
+                "--quiet-header"
             ]
             if clean {
                 builderArgs.append("--clean")
@@ -208,6 +207,9 @@ struct GodotBuildPlugin: CommandPlugin {
             let iosProc = Process()
             iosProc.executableURL = URL(fileURLWithPath: "/bin/bash")
             iosProc.arguments = builderArgs
+            iosProc.standardOutput = FileHandle.standardOutput
+            iosProc.standardError = FileHandle.standardError
+            iosProc.standardInput = FileHandle.standardInput
             try iosProc.run()
             iosProc.waitUntilExit()
 
@@ -216,9 +218,6 @@ struct GodotBuildPlugin: CommandPlugin {
             }
         }
 
-        print("\n================================================================")
-        print("==> Godot Swift Build Complete!")
-        print("    Artifacts deployed to: \(resolvedOutputDir)")
-        print("================================================================\n")
+        print("\n  \u{001B}[1;32m✓\u{001B}[0m Build completed successfully (\(target))\n")
     }
 }
