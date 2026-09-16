@@ -24,7 +24,7 @@ jobs:
         run: swift test
 
       - name: Run Example Swift Unit Tests
-        run: swift test --package-path example/ios
+        run: swift test --package-path example/apple
 
   build-example:
     name: "Build: Example Plugin (macOS & iOS)"
