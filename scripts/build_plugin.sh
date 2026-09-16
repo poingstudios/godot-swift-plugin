@@ -232,8 +232,16 @@ done
 if [ -z "${PACKAGE_DIR}" ]; then
     if [ -f "Package.swift" ]; then
         PACKAGE_DIR="$(pwd)"
+    elif [ -f "platforms/apple/Package.swift" ]; then
+        PACKAGE_DIR="$(pwd)/platforms/apple"
     elif [ -f "platforms/ios/Package.swift" ]; then
         PACKAGE_DIR="$(pwd)/platforms/ios"
+    elif [ -f "example/apple/Package.swift" ]; then
+        PACKAGE_DIR="$(pwd)/example/apple"
+    elif [ -f "example/ios/Package.swift" ]; then
+        PACKAGE_DIR="$(pwd)/example/ios"
+    elif [ -f "apple/Package.swift" ]; then
+        PACKAGE_DIR="$(pwd)/apple"
     elif [ -f "ios/Package.swift" ]; then
         PACKAGE_DIR="$(pwd)/ios"
     elif [ -f "../Package.swift" ]; then

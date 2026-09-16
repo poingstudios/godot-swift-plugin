@@ -71,7 +71,7 @@ Via root script:
 ```
 Or via native SPM Command Plugin:
 ```bash
-cd example/ios && swift package --disable-sandbox --allow-writing-to-package-directory godot-build all
+cd example/apple && swift package --disable-sandbox --allow-writing-to-package-directory godot-build all
 ```
 
 ### Run Example in Godot
@@ -87,7 +87,7 @@ cd example/ios && swift package --disable-sandbox --allow-writing-to-package-dir
 ### Run Unit Tests
 ```bash
 swift test
-swift test --package-path example/ios
+swift test --package-path example/apple
 ```
 
 ---

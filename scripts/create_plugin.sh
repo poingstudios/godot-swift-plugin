@@ -377,15 +377,15 @@ echo ""
 if [ -n "${FRAMEWORK_PATH}" ]; then
     DEP_LINE=".package(path: \"${FRAMEWORK_PATH}\")"
 elif [ -d "${REPO_ROOT}/Sources/GodotSwiftPlugin" ]; then
-    REL_PATH="$(python3 -c "import os.path; print(os.path.relpath(os.path.realpath('${REPO_ROOT}'), os.path.realpath('${OUTPUT_DIR}/platforms/ios')))")"
+    REL_PATH="$(python3 -c "import os.path; print(os.path.relpath(os.path.realpath('${REPO_ROOT}'), os.path.realpath('${OUTPUT_DIR}/platforms/apple')))")"
     DEP_LINE=".package(path: \"${REL_PATH}\")"
 else
     DEP_LINE=".package(url: \"https://github.com/poingstudios/godot-swift-plugin\", branch: \"master\")"
 fi
 
 # Create directory tree
-mkdir -p "${OUTPUT_DIR}/platforms/ios/Sources/${PLUGIN_NAME}"
-mkdir -p "${OUTPUT_DIR}/platforms/ios/Tests/${PLUGIN_NAME}Tests"
+mkdir -p "${OUTPUT_DIR}/platforms/apple/Sources/${PLUGIN_NAME}"
+mkdir -p "${OUTPUT_DIR}/platforms/apple/Tests/${PLUGIN_NAME}Tests"
 mkdir -p "${OUTPUT_DIR}/platforms/godot_editor/addons/${SNAKE_NAME}/internal"
 mkdir -p "${OUTPUT_DIR}/platforms/godot_editor/addons/${SNAKE_NAME}/bin/stubs"
 mkdir -p "${OUTPUT_DIR}/platforms/godot_editor/sample"
@@ -438,7 +438,7 @@ else
 fi
 
 # 1. Package.swift
-cat <<EOF > "${OUTPUT_DIR}/platforms/ios/Package.swift"
+cat <<EOF > "${OUTPUT_DIR}/platforms/apple/Package.swift"
 // swift-tools-version: 5.9
 
 import PackageDescription
@@ -482,7 +482,7 @@ let package = Package(
 EOF
 
 # 2. Plugin Swift Source
-cat <<EOF > "${OUTPUT_DIR}/platforms/ios/Sources/${PLUGIN_NAME}/${PLUGIN_NAME}.swift"
+cat <<EOF > "${OUTPUT_DIR}/platforms/apple/Sources/${PLUGIN_NAME}/${PLUGIN_NAME}.swift"
 import Foundation
 import GodotSwiftPlugin
 
@@ -507,7 +507,7 @@ public final class ${PLUGIN_NAME}: GodotPlugin {
 EOF
 
 # 3. Unit Test Source
-cat <<EOF > "${OUTPUT_DIR}/platforms/ios/Tests/${PLUGIN_NAME}Tests/${PLUGIN_NAME}Tests.swift"
+cat <<EOF > "${OUTPUT_DIR}/platforms/apple/Tests/${PLUGIN_NAME}Tests/${PLUGIN_NAME}Tests.swift"
 import XCTest
 @testable import ${PLUGIN_NAME}
 
@@ -723,7 +723,7 @@ cat <<EOF > "${OUTPUT_DIR}/scripts/build_local.sh"
 set -euo pipefail
 
 SCRIPT_DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
-PACKAGE_DIR="\${SCRIPT_DIR}/../platforms/ios"
+PACKAGE_DIR="\${SCRIPT_DIR}/../platforms/apple"
 
 exec swift package --package-path "\${PACKAGE_DIR}" --disable-sandbox --allow-writing-to-package-directory godot-build "\$@"
 EOF
@@ -735,7 +735,7 @@ cat <<EOF > "${OUTPUT_DIR}/scripts/test_local.sh"
 set -euo pipefail
 
 SCRIPT_DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
-exec swift test --package-path "\${SCRIPT_DIR}/../platforms/ios"
+exec swift test --package-path "\${SCRIPT_DIR}/../platforms/apple"
 EOF
 chmod +x "${OUTPUT_DIR}/scripts/test_local.sh"
 
@@ -771,7 +771,7 @@ Godot 4.x plugin for iOS and macOS, powered by [Godot Swift Plugin](https://gith
 
 ### 2. Write Your Swift Code
 - Native Swift code is located at:
-  \`platforms/ios/Sources/${PLUGIN_NAME}/${PLUGIN_NAME}.swift\`
+  \`platforms/apple/Sources/${PLUGIN_NAME}/${PLUGIN_NAME}.swift\`
 
 ### 3. Rebuild Binaries
 Whenever you modify your Swift code, recompile:
@@ -809,14 +809,14 @@ if [ "${RUN_BUILD}" != true ]; then
     echo -e "  3. ${CYAN}Open in Godot Engine (${GODOT_VERSION}+):${NC}"
     echo -e "     Open 'platforms/godot_editor' and press ${BOLD}F5${NC} to run the sample scene\n"
     echo -e "  4. ${CYAN}Write your Swift code:${NC}"
-    echo -e "     Edit 'platforms/ios/Sources/${PLUGIN_NAME}/${PLUGIN_NAME}.swift'\n"
+    echo -e "     Edit 'platforms/apple/Sources/${PLUGIN_NAME}/${PLUGIN_NAME}.swift'\n"
     echo -e "  5. ${CYAN}Run Swift unit tests:${NC}"
     echo -e "     ./scripts/test_local.sh\n"
 else
     echo -e "  2. ${CYAN}Open in Godot Engine (${GODOT_VERSION}+):${NC}"
     echo -e "     Open 'platforms/godot_editor' and press ${BOLD}F5${NC} to run the sample scene\n"
     echo -e "  3. ${CYAN}Write your Swift code:${NC}"
-    echo -e "     Edit 'platforms/ios/Sources/${PLUGIN_NAME}/${PLUGIN_NAME}.swift'\n"
+    echo -e "     Edit 'platforms/apple/Sources/${PLUGIN_NAME}/${PLUGIN_NAME}.swift'\n"
     echo -e "  4. ${CYAN}Rebuild binaries anytime:${NC}"
     echo -e "     ./scripts/build_local.sh ${PLATFORMS_CHOICE}\n"
     echo -e "  5. ${CYAN}Run Swift unit tests:${NC}"

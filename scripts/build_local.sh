@@ -26,4 +26,4 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-exec swift package --package-path "${ROOT_DIR}/example/ios" --disable-sandbox --allow-writing-to-package-directory godot-build "$@"
+exec swift package --package-path "${ROOT_DIR}/example/apple" --disable-sandbox --allow-writing-to-package-directory godot-build "$@"

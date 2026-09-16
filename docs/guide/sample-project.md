@@ -32,9 +32,9 @@ example/
 ./scripts/build_local.sh all
 ```
 
-Or using native Swift Package Manager inside `example/ios`:
+Or using native Swift Package Manager inside `example/apple`:
 ```bash
-cd example/ios && swift package --disable-sandbox --allow-writing-to-package-directory godot-build all
+cd example/apple && swift package --disable-sandbox --allow-writing-to-package-directory godot-build all
 ```
 
 ### 2. Run in Godot Editor
