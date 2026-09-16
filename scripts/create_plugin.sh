@@ -474,16 +474,17 @@ func _add_linker_flags(flags: String) -> void:
 EOF
 
 # 5. plugin.cfg
-AUTHOR_NAME="\$(git config user.name 2>/dev/null || echo "")"
+AUTHOR_NAME="$(git config user.name 2>/dev/null || echo "")"
 cat <<EOF > "${OUTPUT_DIR}/platforms/godot_editor/addons/${SNAKE_NAME}/plugin.cfg"
 [plugin]
 
 name="${PLUGIN_NAME}"
 description="${PLUGIN_NAME} iOS & macOS plugin for Godot."
-author="\${AUTHOR_NAME}"
+author="${AUTHOR_NAME}"
 version="1.0.0"
 script="plugin.gd"
 EOF
+
 
 # 6. plugin.gd
 cat <<EOF > "${OUTPUT_DIR}/platforms/godot_editor/addons/${SNAKE_NAME}/plugin.gd"
