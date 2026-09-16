@@ -185,12 +185,7 @@ DERIVED_DATA="${BUILD_DIR}/DerivedData"
 
 if [ "${QUIET_HEADER}" = false ]; then
     print_welcome_banner
-    echo -e "${BOLD}Building Godot Swift Plugin...${NC}"
-    echo -e "  ${DIM}•${NC} Plugin Name:   ${GREEN}${PLUGIN_NAME}${NC}"
-    echo -e "  ${DIM}•${NC} Package Dir:   ${PACKAGE_DIR}"
-    echo -e "  ${DIM}•${NC} Output Dir:    ${OUTPUT_DIR}"
-    echo -e "  ${DIM}•${NC} Target:        ${TARGET}"
-    echo -e "  ${DIM}•${NC} Configuration: ${CONFIG}"
+    echo -e "  ${DIM}•${NC} Building ${BOLD}${PLUGIN_NAME}${NC} [${TARGET} | ${CONFIG}]"
     echo ""
 fi
 
@@ -373,15 +368,17 @@ pipeline_run
 if [ "${QUIET_HEADER}" = false ]; then
     echo -e "\n  ${GREEN}✓${NC} Build completed successfully (${TARGET})\n"
 
-    echo -e "${BOLD}Next steps:${NC}"
-    rel_editor="platforms/godot_editor"
-    if [ ! -d "${rel_editor}" ] && [ -d "example/godot_editor" ]; then
-        rel_editor="example/godot_editor"
+    if [ "${CI:-false}" != "true" ] && [ "${GITHUB_ACTIONS:-false}" != "true" ]; then
+        echo -e "${BOLD}Next steps:${NC}"
+        rel_editor="platforms/godot_editor"
+        if [ ! -d "${rel_editor}" ] && [ -d "example/godot_editor" ]; then
+            rel_editor="example/godot_editor"
+        fi
+        echo -e "  1. ${CYAN}Open in Godot Engine (4.6+):${NC}"
+        echo -e "     Open '${rel_editor}' and press ${BOLD}F5${NC} to run your scene\n"
+        echo -e "  2. ${CYAN}Run Swift unit tests:${NC}"
+        echo -e "     swift test --package-path ${PACKAGE_DIR}\n"
     fi
-    echo -e "  1. ${CYAN}Open in Godot Engine (4.6+):${NC}"
-    echo -e "     Open '${rel_editor}' and press ${BOLD}F5${NC} to run your scene\n"
-    echo -e "  2. ${CYAN}Run Swift unit tests:${NC}"
-    echo -e "     swift test --package-path ${PACKAGE_DIR}\n"
 
     print_finish_banner
 fi

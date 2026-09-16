@@ -51,33 +51,13 @@ log_error() {
 
 # Branding Banners
 print_welcome_banner() {
-    local C="${CYAN}"
-    echo -e "\n${C}╭──────────────────────────────────────────────────────────────────────────────╮${NC}"
-    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
-    echo -e "${C}│${NC}                              ${BOLD}Godot Swift Plugin${NC}                              ${C}│${NC}"
-    echo -e "${C}│${NC}             ${DIM}Build native Apple plugins for Godot with pure Swift${NC}             ${C}│${NC}"
-    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
-    echo -e "${C}├──────────────────────────────────────────────────────────────────────────────┤${NC}"
-    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
-    echo -e "${C}│${NC}  ⭐ Star on GitHub:     ${CYAN}https://github.com/poingstudios/godot-swift-plugin${NC}   ${C}│${NC}"
-    echo -e "${C}│${NC}  💖 Support on Patreon: ${CYAN}https://www.patreon.com/c/poingstudios${NC}               ${C}│${NC}"
-    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
-    echo -e "${C}╰──────────────────────────────────────────────────────────────────────────────╯${NC}\n"
+    echo -e "\n  ${BOLD}${CYAN}Godot Swift Plugin${NC} ${DIM}• Build native Apple plugins for Godot with pure Swift${NC}\n"
 }
 
 print_finish_banner() {
-    local C="${GREEN}"
-    echo -e "\n${C}╭──────────────────────────────────────────────────────────────────────────────╮${NC}"
-    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
-    echo -e "${C}│${NC}                              ${BOLD}🎉 Happy Game Dev!${NC}                              ${C}│${NC}"
-    echo -e "${C}│${NC}                ${DIM}Thank you for building with Godot Swift Plugin${NC}                ${C}│${NC}"
-    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
-    echo -e "${C}├──────────────────────────────────────────────────────────────────────────────┤${NC}"
-    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
-    echo -e "${C}│${NC}  ⭐ Star on GitHub:     ${CYAN}https://github.com/poingstudios/godot-swift-plugin${NC}   ${C}│${NC}"
-    echo -e "${C}│${NC}  💖 Support on Patreon: ${CYAN}https://www.patreon.com/c/poingstudios${NC}               ${C}│${NC}"
-    echo -e "${C}│${NC}                                                                              ${C}│${NC}"
-    echo -e "${C}╰──────────────────────────────────────────────────────────────────────────────╯${NC}\n"
+    echo -e "\n  ${BOLD}🎉 Happy Game Dev!${NC}"
+    echo -e "  ⭐ Star on GitHub:     ${CYAN}https://github.com/poingstudios/godot-swift-plugin${NC}"
+    echo -e "  💖 Support on Patreon: ${CYAN}https://www.patreon.com/c/poingstudios${NC}\n"
 }
 
 # Single Step Runner with live progress bar and timers
@@ -104,62 +84,80 @@ run_step() {
     local base_pct=$(( (step_idx - 1) * 100 / total_steps ))
     local target_pct=$(( step_idx * 100 / total_steps ))
     local span=$(( target_pct - base_pct ))
+    [ "${span}" -lt 1 ] && span=1
 
-    local tty_out=""
-    if [ -t 2 ]; then
-        tty_out="/dev/stderr"
-    elif [ -t 1 ]; then
-        tty_out="/dev/stdout"
-    elif [ -c /dev/tty ] && { : > /dev/tty; } 2>/dev/null; then
-        tty_out="/dev/tty"
+    local is_tty=false
+    if [ -t 2 ] || [ -t 1 ]; then
+        is_tty=true
     fi
 
     local log_file
     log_file="$(mktemp /tmp/gsp_step_XXXXXX)"
 
     local spinner_chars=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
-    local delay=0.08
-    local bar_width=12
+    local delay=0.1
+    if [ "${is_tty}" = false ]; then
+        delay=0.3
+    fi
+    local bar_width=10
     local start_time
     start_time="$(date +%s)"
 
     "$@" > "${log_file}" 2>&1 &
     local pid=$!
 
-    if [ -n "${tty_out}" ]; then
-        printf "\033[?25l" > "${tty_out}"
-        local tick=0
-        while kill -0 "${pid}" 2>/dev/null; do
-            local spin="${spinner_chars[tick % ${#spinner_chars[@]}]}"
-            local elapsed=$(( $(date +%s) - start_time ))
+    if [ "${is_tty}" = true ]; then
+        printf "\033[?25l" >&2
+    fi
 
-            local elapsed_ms=$(( tick * 80 ))
-            local inc=$(( elapsed_ms * span / (est_secs * 1000) ))
-            if [ "${inc}" -ge "${span}" ]; then
-                inc=$(( span - 1 ))
-            fi
-            local pct=$(( base_pct + inc ))
+    local tick=0
+    while kill -0 "${pid}" 2>/dev/null; do
+        local spin="${spinner_chars[tick % ${#spinner_chars[@]}]}"
+        local elapsed=$(( $(date +%s) - start_time ))
 
-            local filled_cnt=$(( pct * bar_width / 100 ))
-            local empty_cnt=$(( bar_width - filled_cnt ))
-            local filled=""
-            local empty=""
-            [ "${filled_cnt}" -gt 0 ] && filled=$(printf "%*s" "${filled_cnt}" | tr " " "█")
-            [ "${empty_cnt}" -gt 0 ] && empty=$(printf "%*s" "${empty_cnt}" | tr " " "░")
+        local elapsed_ms=$(( tick * 100 ))
+        if [ "${is_tty}" = false ]; then
+            elapsed_ms=$(( tick * 300 ))
+        fi
 
-            printf "\r\033[K  \033[1;36m%s\033[0m \033[2m[\033[0m\033[36m%s\033[0m\033[2m%s]\033[0m \033[1m%3d%%\033[0m  %s \033[2m(%ds)\033[0m" \
-                "${spin}" "${filled}" "${empty}" "${pct}" "${step_label}" "${elapsed}" > "${tty_out}"
-            tick=$(( tick + 1 ))
-            sleep "${delay}"
-        done
-        printf "\033[?25h" > "${tty_out}"
-    else
-        printf "  \033[2m•\033[0m %s...\n" "${step_label}" >&2
+        local inc=$(( elapsed_ms * span / (est_secs * 1000) ))
+        if [ "${inc}" -ge "${span}" ]; then
+            inc=$(( span - 1 ))
+        fi
+        local pct=$(( base_pct + inc ))
+        [ "${pct}" -lt 1 ] && pct=1
+
+        local filled_cnt=$(( pct * bar_width / 100 ))
+        local empty_cnt=$(( bar_width - filled_cnt ))
+        local filled=""
+        local empty=""
+        [ "${filled_cnt}" -gt 0 ] && filled=$(printf "%*s" "${filled_cnt}" | tr " " "█")
+        [ "${empty_cnt}" -gt 0 ] && empty=$(printf "%*s" "${empty_cnt}" | tr " " "░")
+
+        printf "\r\033[K  \033[1;36m%s\033[0m \033[2m[\033[0m\033[36m%s\033[0m\033[2m%s]\033[0m \033[1m%3d%%\033[0m  %s \033[2m(%ds)\033[0m" \
+            "${spin}" "${filled}" "${empty}" "${pct}" "${step_label}" "${elapsed}" >&2
+
+        tick=$(( tick + 1 ))
+        sleep "${delay}"
+    done
+
+    if [ "${is_tty}" = true ]; then
+        printf "\033[?25h" >&2
     fi
 
     wait "${pid}"
     local exit_code=$?
     local total_elapsed=$(( $(date +%s) - start_time ))
+
+    local done_pct="${target_pct}"
+    local done_filled_cnt=$(( done_pct * bar_width / 100 ))
+    local done_empty_cnt=$(( bar_width - done_filled_cnt ))
+    local done_filled=""
+    local done_empty=""
+    [ "${done_filled_cnt}" -gt 0 ] && done_filled=$(printf "%*s" "${done_filled_cnt}" | tr " " "█")
+    [ "${done_empty_cnt}" -gt 0 ] && done_empty=$(printf "%*s" "${done_empty_cnt}" | tr " " "░")
+    local bar_done
+    bar_done="$(printf "\033[2m[\033[0m\033[32m%s\033[0m\033[2m%s]\033[0m \033[1;32m%3d%%\033[0m" "${done_filled}" "${done_empty}" "${done_pct}")"
 
     local warnings=()
     if [ -f "${log_file}" ]; then
@@ -170,31 +168,30 @@ run_step() {
 
     if [ "${exit_code}" -eq 0 ]; then
         if [ ${#warnings[@]} -gt 0 ]; then
-            if [ -n "${tty_out}" ]; then
-                printf "\r\033[K  \033[1;33m⚠\033[0m %s \033[2m(%d warning%s)\033[0m \033[2m(%ds)\033[0m\n" \
-                    "${success_label}" "${#warnings[@]}" "$([ ${#warnings[@]} -gt 1 ] && echo "s" || echo "")" "${total_elapsed}" > "${tty_out}"
-            else
-                printf "  \033[1;33m⚠\033[0m %s \033[2m(%d warning%s)\033[0m \033[2m(%ds)\033[0m\n" \
-                    "${success_label}" "${#warnings[@]}" "$([ ${#warnings[@]} -gt 1 ] && echo "s" || echo "")" "${total_elapsed}" >&2
-            fi
+            printf "\r\033[K  \033[1;33m⚠\033[0m %b  %s \033[2m(%d warning%s)\033[0m \033[2m(%ds)\033[0m\n" \
+                "${bar_done}" "${success_label}" "${#warnings[@]}" "$([ ${#warnings[@]} -gt 1 ] && echo "s" || echo "")" "${total_elapsed}" >&2
             for w in "${warnings[@]}"; do
                 printf "    \033[33m%s\033[0m\n" "${w}" >&2
             done
         else
-            if [ -n "${tty_out}" ]; then
-                printf "\r\033[K  \033[1;32m✓\033[0m %s \033[2m(%ds)\033[0m\n" "${success_label}" "${total_elapsed}" > "${tty_out}"
-            else
-                printf "  \033[1;32m✓\033[0m %s \033[2m(%ds)\033[0m\n" "${success_label}" "${total_elapsed}" >&2
-            fi
+            printf "\r\033[K  \033[1;32m✓\033[0m %b  %s \033[2m(%ds)\033[0m\n" "${bar_done}" "${success_label}" "${total_elapsed}" >&2
         fi
         rm -f "${log_file}"
         return 0
     else
-        if [ -n "${tty_out}" ]; then
-            printf "\r\033[K  \033[1;31m✖\033[0m %s \033[1;31m(failed after %ds)\033[0m\n\n" "${step_label}" "${total_elapsed}" > "${tty_out}"
-        else
-            printf "  \033[1;31m✖\033[0m %s \033[1;31m(failed after %ds)\033[0m\n\n" "${step_label}" "${total_elapsed}" >&2
-        fi
+        local fail_pct=$(( base_pct + (tick * (is_tty && 100 || 300) * span / (est_secs * 1000)) ))
+        [ "${fail_pct}" -gt "${target_pct}" ] && fail_pct="${target_pct}"
+        [ "${fail_pct}" -lt 1 ] && fail_pct=1
+        local fail_filled_cnt=$(( fail_pct * bar_width / 100 ))
+        local fail_empty_cnt=$(( bar_width - fail_filled_cnt ))
+        local fail_filled=""
+        local fail_empty=""
+        [ "${fail_filled_cnt}" -gt 0 ] && fail_filled=$(printf "%*s" "${fail_filled_cnt}" | tr " " "█")
+        [ "${fail_empty_cnt}" -gt 0 ] && fail_empty=$(printf "%*s" "${fail_empty_cnt}" | tr " " "░")
+        local bar_fail
+        bar_fail="$(printf "\033[2m[\033[0m\033[31m%s\033[0m\033[2m%s]\033[0m \033[1;31m%3d%%\033[0m" "${fail_filled}" "${fail_empty}" "${fail_pct}")"
+
+        printf "\r\033[K  \033[1;31m✖\033[0m %b  %s \033[1;31m(failed after %ds)\033[0m\n\n" "${bar_fail}" "${step_label}" "${total_elapsed}" >&2
         if [ -f "${log_file}" ]; then
             cat "${log_file}" >&2
             rm -f "${log_file}"
@@ -202,6 +199,7 @@ run_step() {
         return "${exit_code}"
     fi
 }
+
 
 # Dynamic Step Pipeline (SOLID / DRY)
 PIPELINE_TAGS=()
