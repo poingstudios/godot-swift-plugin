@@ -78,6 +78,42 @@ run_step() {
         shift 2
     fi
 
+    local is_ci=false
+    if [ "${CI:-false}" = "true" ] || [ "${GITHUB_ACTIONS:-false}" = "true" ]; then
+        is_ci=true
+    fi
+
+    local is_tty=false
+    if [ -t 2 ] || [ -t 1 ]; then
+        is_tty=true
+    fi
+
+    if [ "${is_ci}" = true ] || [ "${is_tty}" = false ]; then
+        echo -e "  ${CYAN}•${NC} ${step_label}..."
+        local start_time
+        start_time="$(date +%s)"
+
+        local exit_code=0
+        "$@" 2>&1 | while IFS= read -r line || [ -n "${line}" ]; do
+            if [[ "${line}" =~ (Write sources|Write swift-version|Write Objects\.LinkFileList|Building for |Planning build|Build complete|Build of product .* complete|\[MT\] IDERunDestination) ]]; then
+                continue
+            fi
+            line="$(echo "${line}" | sed -E 's/^\[[0-9]+\/[0-9]+\] //')"
+            if [ -n "${line}" ]; then
+                printf "    \033[2m│\033[0m %s\n" "${line}"
+            fi
+        done || exit_code="${PIPESTATUS[0]}"
+
+        local total_elapsed=$(( $(date +%s) - start_time ))
+        if [ "${exit_code}" -eq 0 ]; then
+            echo -e "  ${GREEN}✓${NC} ${success_label} \033[2m(${total_elapsed}s)\033[0m"
+            return 0
+        else
+            echo -e "\n  ${RED}✖${NC} ${step_label} \033[1;31m(failed after ${total_elapsed}s)\033[0m\n" >&2
+            return "${exit_code}"
+        fi
+    fi
+
     local step_idx="${CURRENT_STEP_INDEX:-1}"
     local total_steps="${CURRENT_STEP_TOTAL:-1}"
 
@@ -86,19 +122,10 @@ run_step() {
     local span=$(( target_pct - base_pct ))
     [ "${span}" -lt 1 ] && span=1
 
-    local is_tty=false
-    if [ -t 2 ] || [ -t 1 ]; then
-        is_tty=true
-    fi
-
     local log_file
     log_file="$(mktemp /tmp/gsp_step_XXXXXX)"
 
     local spinner_chars=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
-    local delay=0.1
-    if [ "${is_tty}" = false ]; then
-        delay=0.3
-    fi
     local bar_width=10
     local start_time
     start_time="$(date +%s)"
@@ -106,60 +133,31 @@ run_step() {
     "$@" > "${log_file}" 2>&1 &
     local pid=$!
 
-    if [ "${is_tty}" = true ]; then
-        printf "\033[?25l" >&2
-        local tick=0
-        while kill -0 "${pid}" 2>/dev/null; do
-            local spin="${spinner_chars[tick % ${#spinner_chars[@]}]}"
-            local elapsed=$(( $(date +%s) - start_time ))
-            local elapsed_ms=$(( tick * 100 ))
-            local inc=$(( elapsed_ms * span / (est_secs * 1000) ))
-            [ "${inc}" -ge "${span}" ] && inc=$(( span - 1 ))
-            local pct=$(( base_pct + inc ))
-            [ "${pct}" -lt 1 ] && pct=1
+    printf "\033[?25l" >&2
+    local tick=0
+    while kill -0 "${pid}" 2>/dev/null; do
+        local spin="${spinner_chars[tick % ${#spinner_chars[@]}]}"
+        local elapsed=$(( $(date +%s) - start_time ))
+        local elapsed_ms=$(( tick * 100 ))
+        local inc=$(( elapsed_ms * span / (est_secs * 1000) ))
+        [ "${inc}" -ge "${span}" ] && inc=$(( span - 1 ))
+        local pct=$(( base_pct + inc ))
+        [ "${pct}" -lt 1 ] && pct=1
 
-            local filled_cnt=$(( pct * bar_width / 100 ))
-            local empty_cnt=$(( bar_width - filled_cnt ))
-            local filled=""
-            local empty=""
-            [ "${filled_cnt}" -gt 0 ] && filled=$(printf "%*s" "${filled_cnt}" | tr " " "█")
-            [ "${empty_cnt}" -gt 0 ] && empty=$(printf "%*s" "${empty_cnt}" | tr " " "░")
+        local filled_cnt=$(( pct * bar_width / 100 ))
+        local empty_cnt=$(( bar_width - filled_cnt ))
+        local filled=""
+        local empty=""
+        [ "${filled_cnt}" -gt 0 ] && filled=$(printf "%*s" "${filled_cnt}" | tr " " "█")
+        [ "${empty_cnt}" -gt 0 ] && empty=$(printf "%*s" "${empty_cnt}" | tr " " "░")
 
-            printf "\r\033[K  \033[1;36m%s\033[0m \033[2m[\033[0m\033[36m%s\033[0m\033[2m%s]\033[0m \033[1m%3d%%\033[0m  %s \033[2m(%ds)\033[0m" \
-                "${spin}" "${filled}" "${empty}" "${pct}" "${step_label}" "${elapsed}" >&2
+        printf "\r\033[K  \033[1;36m%s\033[0m \033[2m[\033[0m\033[36m%s\033[0m\033[2m%s]\033[0m \033[1m%3d%%\033[0m  %s \033[2m(%ds)\033[0m" \
+            "${spin}" "${filled}" "${empty}" "${pct}" "${step_label}" "${elapsed}" >&2
 
-            tick=$(( tick + 1 ))
-            sleep 0.1
-        done
-        printf "\033[?25h" >&2
-    else
-        local tick=0
-        local last_logged_sec=-1
-        while kill -0 "${pid}" 2>/dev/null; do
-            local elapsed=$(( $(date +%s) - start_time ))
-            if [ "${elapsed}" -ne "${last_logged_sec}" ] && { [ "${elapsed}" -eq 0 ] || [ $(( elapsed % 3 )) -eq 0 ]; }; then
-                last_logged_sec="${elapsed}"
-                local spin="${spinner_chars[tick % ${#spinner_chars[@]}]}"
-                local elapsed_ms=$(( elapsed * 1000 ))
-                local inc=$(( elapsed_ms * span / (est_secs * 1000) ))
-                [ "${inc}" -ge "${span}" ] && inc=$(( span - 1 ))
-                local pct=$(( base_pct + inc ))
-                [ "${pct}" -lt 1 ] && pct=1
-
-                local filled_cnt=$(( pct * bar_width / 100 ))
-                local empty_cnt=$(( bar_width - filled_cnt ))
-                local filled=""
-                local empty=""
-                [ "${filled_cnt}" -gt 0 ] && filled=$(printf "%*s" "${filled_cnt}" | tr " " "█")
-                [ "${empty_cnt}" -gt 0 ] && empty=$(printf "%*s" "${empty_cnt}" | tr " " "░")
-
-                printf "  \033[1;36m%s\033[0m \033[2m[\033[0m\033[36m%s\033[0m\033[2m%s]\033[0m \033[1m%3d%%\033[0m  %s \033[2m(%ds)\033[0m\n" \
-                    "${spin}" "${filled}" "${empty}" "${pct}" "${step_label}" "${elapsed}" >&2
-            fi
-            tick=$(( tick + 1 ))
-            sleep 0.5
-        done
-    fi
+        tick=$(( tick + 1 ))
+        sleep 0.1
+    done
+    printf "\033[?25h" >&2
 
     local exit_code=0
     wait "${pid}" || exit_code=$?
@@ -175,8 +173,7 @@ run_step() {
     local bar_done
     bar_done="$(printf "\033[2m[\033[0m\033[32m%s\033[0m\033[2m%s]\033[0m \033[1;32m%3d%%\033[0m" "${done_filled}" "${done_empty}" "${done_pct}")"
 
-    local prefix_clear=""
-    [ "${is_tty}" = true ] && prefix_clear="\r\033[K"
+    local prefix_clear="\r\033[K"
 
     local warnings=()
     if [ -f "${log_file}" ]; then
