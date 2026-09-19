@@ -95,7 +95,13 @@ run_step() {
 
         local exit_code=0
         "$@" 2>&1 | while IFS= read -r line || [ -n "${line}" ]; do
-            printf "    \033[2m│\033[0m %s\n" "${line}"
+            if [[ "${line}" =~ (Write sources|Write swift-version|Write Objects\.LinkFileList|Building for |Planning build|Build complete|Build of product .* complete|\[MT\] IDERunDestination) ]]; then
+                continue
+            fi
+            line="$(echo "${line}" | sed -E 's/^\[[0-9]+\/[0-9]+\] //')"
+            if [ -n "${line}" ]; then
+                printf "    \033[2m│\033[0m %s\n" "${line}"
+            fi
         done || exit_code="${PIPESTATUS[0]}"
 
         local total_elapsed=$(( $(date +%s) - start_time ))
