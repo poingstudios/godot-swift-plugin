@@ -94,7 +94,9 @@ run_step() {
         start_time="$(date +%s)"
 
         local exit_code=0
-        "$@" || exit_code=$?
+        "$@" 2>&1 | while IFS= read -r line || [ -n "${line}" ]; do
+            printf "    \033[2m│\033[0m %s\n" "${line}"
+        done || exit_code="${PIPESTATUS[0]}"
 
         local total_elapsed=$(( $(date +%s) - start_time ))
         if [ "${exit_code}" -eq 0 ]; then
