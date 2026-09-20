@@ -1,15 +1,15 @@
-[gd_scene load_steps=2 format=3 uid="uid://b7v8k1w8s9p2q"]
+[gd_scene load_steps=2 format=3 uid="uid://cx4v9e8m2y1k7"]
 
-[ext_resource type="Script" path="res://sample/sample.gd" id="1_x8p2q"]
+[ext_resource type="Script" path="res://sample/direct_sample.gd" id="1_d8p3m"]
 
-[node name="Sample" type="Control"]
+[node name="DirectSample" type="Control"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1_x8p2q")
+script = ExtResource("1_d8p3m")
 
 [node name="VBoxContainer" type="VBoxContainer" parent="."]
 layout_mode = 1
@@ -17,30 +17,30 @@ anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 24.0
-offset_top = 110.0
+offset_top = 40.0
 offset_right = -24.0
 offset_bottom = -24.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 16
+theme_override_constants/separation = 12
 
 [node name="TitleLabel" type="Label" parent="VBoxContainer"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 32
-text = "Godot Swift Plugin"
+theme_override_font_sizes/font_size = 28
+text = "Direct Swift Plugin Sample"
 horizontal_alignment = 1
 
 [node name="SubtitleLabel" type="Label" parent="VBoxContainer"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "Interactive SOLID Architecture Verification"
+theme_override_font_sizes/font_size = 16
+text = "Pure Object / Class DB Usage (No Wrapper, No Engine.has_singleton)"
 horizontal_alignment = 1
 
-[node name="BtnSwitchToDirect" type="Button" parent="VBoxContainer"]
+[node name="BtnSwitchToWrapper" type="Button" parent="VBoxContainer"]
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
-text = "Switch to Direct Class Sample (No Wrapper)"
+text = "Switch to Standard Wrapper Sample"
 
 [node name="HSeparator" type="HSeparator" parent="VBoxContainer"]
 layout_mode = 2
@@ -48,86 +48,86 @@ layout_mode = 2
 [node name="GridContainer" type="GridContainer" parent="VBoxContainer"]
 layout_mode = 2
 theme_override_constants/h_separation = 10
-theme_override_constants/v_separation = 10
+theme_override_constants/v_separation = 8
 columns = 2
 
 [node name="BtnPing" type="Button" parent="VBoxContainer/GridContainer"]
-custom_minimum_size = Vector2(0, 52)
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 19
-text = "Ping (Greeting)"
+theme_override_font_sizes/font_size = 16
+text = "Direct Ping"
 
 [node name="BtnAdd" type="Button" parent="VBoxContainer/GridContainer"]
-custom_minimum_size = Vector2(0, 52)
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 19
-text = "Add (15 + 27)"
+theme_override_font_sizes/font_size = 16
+text = "Direct Add (15 + 27)"
 
 [node name="BtnMultiply" type="Button" parent="VBoxContainer/GridContainer"]
-custom_minimum_size = Vector2(0, 52)
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 19
-text = "Multiply (8 * 9)"
+theme_override_font_sizes/font_size = 16
+text = "Direct Multiply (8 * 9)"
 
 [node name="BtnProfile" type="Button" parent="VBoxContainer/GridContainer"]
-custom_minimum_size = Vector2(0, 52)
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 19
-text = "Get Profile"
+theme_override_font_sizes/font_size = 16
+text = "Direct Get Profile"
 
 [node name="BtnUpdateProfile" type="Button" parent="VBoxContainer/GridContainer"]
-custom_minimum_size = Vector2(0, 52)
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 19
-text = "Update Profile"
+theme_override_font_sizes/font_size = 16
+text = "Direct Update Profile"
 
 [node name="BtnStartSession" type="Button" parent="VBoxContainer/GridContainer"]
-custom_minimum_size = Vector2(0, 52)
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 19
-text = "Start Session"
+theme_override_font_sizes/font_size = 16
+text = "Direct Start Session"
 
 [node name="BtnEndSession" type="Button" parent="VBoxContainer/GridContainer"]
-custom_minimum_size = Vector2(0, 52)
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 19
-text = "End Session"
+theme_override_font_sizes/font_size = 16
+text = "Direct End Session"
 
 [node name="BtnSigProfile" type="Button" parent="VBoxContainer/GridContainer"]
-custom_minimum_size = Vector2(0, 52)
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 19
-text = "Signal: Profile"
+theme_override_font_sizes/font_size = 16
+text = "Trigger Profile Signal"
 
 [node name="BtnSigScore" type="Button" parent="VBoxContainer/GridContainer"]
-custom_minimum_size = Vector2(0, 52)
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 19
-text = "Signal: Score"
+theme_override_font_sizes/font_size = 16
+text = "Trigger Score Signal"
 
 [node name="BtnSigEnd" type="Button" parent="VBoxContainer/GridContainer"]
-custom_minimum_size = Vector2(0, 52)
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 19
-text = "Signal: Session End"
+theme_override_font_sizes/font_size = 16
+text = "Trigger End Signal"
 
 [node name="HSeparator2" type="HSeparator" parent="VBoxContainer"]
 layout_mode = 2
 
 [node name="LogsHeader" type="Label" parent="VBoxContainer"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "Execution Log:"
+theme_override_font_sizes/font_size = 18
+text = "Direct Execution Log:"
 
 [node name="ScrollContainer" type="ScrollContainer" parent="VBoxContainer"]
 layout_mode = 2
@@ -137,6 +137,6 @@ size_flags_vertical = 3
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-theme_override_font_sizes/normal_font_size = 18
+theme_override_font_sizes/normal_font_size = 16
 bbcode_enabled = true
 scroll_following = true

@@ -22,6 +22,30 @@
 
 import Foundation
 import ObjectiveC
+import CGDExtensionInterface
+
+/// Metadata describing an exported Godot method discovered via reflection.
+public struct GodotMethodMetadata: Sendable {
+    public let canonicalName: String
+    public let selector: Selector
+    public let argumentNames: [String]
+    public let argumentTypes: [GDExtensionVariantType]
+    public let returnType: GDExtensionVariantType? // nil means void (has_return_value = 0)
+
+    public init(
+        canonicalName: String,
+        selector: Selector,
+        argumentNames: [String],
+        argumentTypes: [GDExtensionVariantType],
+        returnType: GDExtensionVariantType?
+    ) {
+        self.canonicalName = canonicalName
+        self.selector = selector
+        self.argumentNames = argumentNames
+        self.argumentTypes = argumentTypes
+        self.returnType = returnType
+    }
+}
 
 /// Dispatches method calls dynamically to @objc annotated methods using Objective-C runtime introspection.
 public enum GodotRuntimeDispatcher {
@@ -124,6 +148,121 @@ public enum GodotRuntimeDispatcher {
         }
 
         return result
+    }
+
+    /// Returns the number of arguments expected by the selector.
+    public static func argumentCount(for selector: Selector) -> Int {
+        let selName = NSStringFromSelector(selector)
+        return selName.filter { $0 == ":" }.count
+    }
+
+    /// Discovers all candidate @objc methods on a plugin instance with typed metadata.
+    public static func discoverMethodMetadata(for plugin: GodotPlugin) -> [GodotMethodMetadata] {
+        var result: [GodotMethodMetadata] = []
+        var count: UInt32 = 0
+
+        guard let list = class_copyMethodList(type(of: plugin), &count) else {
+            return []
+        }
+        defer { free(list) }
+
+        var seenNames = Set<String>()
+
+        for i in 0..<Int(count) {
+            let m = list[i]
+            let sel = method_getName(m)
+            let selName = NSStringFromSelector(sel)
+
+            if ignoredSelectors.contains(selName) || selName.hasPrefix(".") {
+                continue
+            }
+
+            // Extract base method name and first argument name
+            let parts = selName.split(separator: ":", omittingEmptySubsequences: false)
+            let firstPart = String(parts.first ?? "")
+
+            let canonicalName: String
+            var firstArgName: String?
+
+            if let withRange = firstPart.range(of: "With") {
+                let pure = String(firstPart[..<withRange.lowerBound])
+                let arg = String(firstPart[withRange.upperBound...])
+                canonicalName = pure.isEmpty ? firstPart : pure
+                if !arg.isEmpty {
+                    firstArgName = GodotPluginRegistry.camelToSnakeCase(arg)
+                }
+            } else {
+                canonicalName = firstPart
+            }
+
+            if seenNames.contains(canonicalName) {
+                continue
+            }
+            seenNames.insert(canonicalName)
+
+            let totalArgs = Int(method_getNumberOfArguments(m))
+            let userArgCount = max(0, totalArgs - 2)
+
+            var argNames: [String] = []
+            for argIdx in 0..<userArgCount {
+                if argIdx == 0, let firstArg = firstArgName, !firstArg.isEmpty {
+                    argNames.append(firstArg)
+                } else if argIdx > 0 && argIdx < parts.count {
+                    let partName = String(parts[argIdx])
+                    let clean = GodotPluginRegistry.camelToSnakeCase(partName)
+                    argNames.append(clean.isEmpty ? "arg\(argIdx)" : clean)
+                } else {
+                    argNames.append("arg\(argIdx)")
+                }
+            }
+
+            var argTypes: [GDExtensionVariantType] = []
+            for argIdx in 0..<userArgCount {
+                if let argTypeCStr = method_copyArgumentType(m, UInt32(argIdx + 2)) {
+                    let typeEncoding = String(cString: argTypeCStr)
+                    free(argTypeCStr)
+                    argTypes.append(mapTypeEncodingToVariantType(typeEncoding, methodName: canonicalName))
+                } else {
+                    argTypes.append(GDEXTENSION_VARIANT_TYPE_NIL)
+                }
+            }
+
+            var returnType: GDExtensionVariantType?
+            let retTypeCStr = method_copyReturnType(m)
+            let typeEncoding = String(cString: retTypeCStr)
+            free(retTypeCStr)
+            if typeEncoding == "v" {
+                returnType = nil
+            } else {
+                returnType = mapTypeEncodingToVariantType(typeEncoding, methodName: canonicalName)
+            }
+
+            result.append(GodotMethodMetadata(
+                canonicalName: canonicalName,
+                selector: sel,
+                argumentNames: argNames,
+                argumentTypes: argTypes,
+                returnType: returnType
+            ))
+        }
+
+        return result
+    }
+
+    private static func mapTypeEncodingToVariantType(_ encoding: String, methodName: String) -> GDExtensionVariantType {
+        guard let first = encoding.first else { return GDEXTENSION_VARIANT_TYPE_NIL }
+        switch first {
+        case "B", "c", "C":
+            // On Darwin x86_64, ObjC BOOL is typedef'd as signed char ('c').
+            // On arm64, it is bool ('B'). Both represent Godot's bool.
+            return GDEXTENSION_VARIANT_TYPE_BOOL
+        case "s", "S", "i", "I", "l", "L", "q", "Q":
+            return GDEXTENSION_VARIANT_TYPE_INT
+        case "f", "d":
+            return GDEXTENSION_VARIANT_TYPE_FLOAT
+        default:
+            return GDEXTENSION_VARIANT_TYPE_NIL
+        }
     }
 
     /// Invokes a selector dynamically on target with the provided arguments.

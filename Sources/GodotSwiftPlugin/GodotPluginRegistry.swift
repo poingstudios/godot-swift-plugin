@@ -31,6 +31,8 @@ public final class GodotPluginRegistry: @unchecked Sendable {
     private let lock = NSRecursiveLock()
     private var plugins: [String: GodotPlugin] = [:]
     private var methods: [String: [String: MethodHandler]] = [:]
+    private var methodArgCounts: [String: [String: Int]] = [:]
+    private var canonicalMetadata: [String: [GodotMethodMetadata]] = [:]
     private var signals: [String: Set<String>] = [:]
 
     /// Global callback invoked whenever any plugin emits a signal (for testing / listeners).
@@ -48,6 +50,12 @@ public final class GodotPluginRegistry: @unchecked Sendable {
         if methods[name] == nil {
             methods[name] = [:]
         }
+        if methodArgCounts[name] == nil {
+            methodArgCounts[name] = [:]
+        }
+        if canonicalMetadata[name] == nil {
+            canonicalMetadata[name] = []
+        }
         if signals[name] == nil {
             signals[name] = []
         }
@@ -62,7 +70,7 @@ public final class GodotPluginRegistry: @unchecked Sendable {
     }
 
     /// Registers a method for a specific plugin.
-    public func registerMethod(pluginName: String, methodName: String, handler: @escaping MethodHandler) {
+    public func registerMethod(pluginName: String, methodName: String, argumentCount: Int = 0, handler: @escaping MethodHandler) {
         lock.lock()
         defer { lock.unlock() }
 
@@ -70,6 +78,53 @@ public final class GodotPluginRegistry: @unchecked Sendable {
             methods[pluginName] = [:]
         }
         methods[pluginName]?[methodName] = handler
+
+        if methodArgCounts[pluginName] == nil {
+            methodArgCounts[pluginName] = [:]
+        }
+        methodArgCounts[pluginName]?[methodName] = argumentCount
+    }
+
+    /// Registers a method with full metadata for ClassDB export and reflection dispatch.
+    public func registerMethod(pluginName: String, metadata: GodotMethodMetadata, handler: @escaping MethodHandler) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if canonicalMetadata[pluginName] == nil {
+            canonicalMetadata[pluginName] = []
+        }
+        if !canonicalMetadata[pluginName]!.contains(where: { $0.canonicalName == metadata.canonicalName }) {
+            canonicalMetadata[pluginName]!.append(metadata)
+        }
+
+        registerMethod(
+            pluginName: pluginName,
+            methodName: metadata.canonicalName,
+            argumentCount: metadata.argumentNames.count,
+            handler: handler
+        )
+
+        let selName = NSStringFromSelector(metadata.selector)
+        if selName != metadata.canonicalName {
+            if let firstColon = selName.firstIndex(of: ":") {
+                let baseSel = String(selName[..<firstColon])
+                if baseSel != metadata.canonicalName {
+                    registerMethod(
+                        pluginName: pluginName,
+                        methodName: baseSel,
+                        argumentCount: metadata.argumentNames.count,
+                        handler: handler
+                    )
+                }
+            }
+        }
+    }
+
+    /// Returns list of canonical method metadata for export to ClassDB.
+    public func getCanonicalMethodMetadata(for pluginName: String) -> [GodotMethodMetadata] {
+        lock.lock()
+        defer { lock.unlock() }
+        return canonicalMetadata[pluginName] ?? []
     }
 
     /// Declares a signal for a specific plugin.
@@ -81,6 +136,25 @@ public final class GodotPluginRegistry: @unchecked Sendable {
             signals[pluginName] = []
         }
         signals[pluginName]?.insert(signalName)
+    }
+
+    /// Returns the registered argument count for a plugin's method.
+    public func getArgumentCount(for pluginName: String, methodName: String) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if let count = methodArgCounts[pluginName]?[methodName] {
+            return count
+        }
+        let camelName = Self.snakeToCamelCase(methodName)
+        if let count = methodArgCounts[pluginName]?[camelName] {
+            return count
+        }
+        let snakeName = Self.camelToSnakeCase(methodName)
+        if let count = methodArgCounts[pluginName]?[snakeName] {
+            return count
+        }
+        return 0
     }
 
     /// Invokes a registered method by plugin and method name with automatic camelCase / snake_case aliasing.
@@ -229,6 +303,8 @@ public final class GodotPluginRegistry: @unchecked Sendable {
         defer { lock.unlock() }
         plugins.removeAll()
         methods.removeAll()
+        methodArgCounts.removeAll()
+        canonicalMetadata.removeAll()
         signals.removeAll()
         onSignalEmitted = nil
     }
