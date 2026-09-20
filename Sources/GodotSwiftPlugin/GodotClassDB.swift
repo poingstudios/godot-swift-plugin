@@ -29,12 +29,14 @@ private final class MethodBindingData {
     let className: String
     let methodName: String
     let methodStringName: GodotStringName
+    let metadata: GodotMethodMetadata
 
-    init(pluginName: String, className: String, methodName: String) {
+    init(pluginName: String, className: String, metadata: GodotMethodMetadata) {
         self.pluginName = pluginName
         self.className = className
-        self.methodName = methodName
-        self.methodStringName = GodotStringName.cached(methodName)
+        self.methodName = metadata.canonicalName
+        self.methodStringName = GodotStringName.cached(metadata.canonicalName)
+        self.metadata = metadata
     }
 }
 
@@ -45,6 +47,7 @@ private final class ClassBindingData {
     let classStringName: GodotStringName
     let parentStringName: GodotStringName
     var godotObject: GDExtensionObjectPtr?
+    var instances: [GDExtensionObjectPtr] = []
 
     init(pluginName: String, className: String) {
         self.pluginName = pluginName
@@ -124,11 +127,14 @@ public final class GodotClassDB: @unchecked Sendable {
             data.classStringName.withUnsafeRawPointer { classNamePtr in
                 gi.object_set_instance?(godotObj, classNamePtr, swiftInstancePtr)
             }
+            data.instances.append(godotObj)
             return godotObj
         }
 
         creationInfo.free_instance_func = { userdata, instancePtr in
-            // Instance cleanup
+            guard let userdata, let instancePtr else { return }
+            let data = Unmanaged<ClassBindingData>.fromOpaque(userdata).takeUnretainedValue()
+            data.instances.removeAll { $0 == instancePtr }
         }
 
         classData.classStringName.withUnsafeRawPointer { classNamePtr in
@@ -148,9 +154,27 @@ public final class GodotClassDB: @unchecked Sendable {
         }
 
         // 2. Register Methods
-        let methodNames = GodotPluginRegistry.shared.getMethods(for: pluginName)
-        for methodName in methodNames {
-            registerMethod(className: className, pluginName: pluginName, methodName: methodName)
+        let canonicalMetadata = GodotPluginRegistry.shared.getCanonicalMethodMetadata(for: pluginName)
+        if !canonicalMetadata.isEmpty {
+            for meta in canonicalMetadata {
+                registerMethod(className: className, pluginName: pluginName, metadata: meta)
+            }
+        } else {
+            let methodNames = GodotPluginRegistry.shared.getMethods(for: pluginName)
+            for methodName in methodNames {
+                let argCount = GodotPluginRegistry.shared.getArgumentCount(for: pluginName, methodName: methodName)
+                registerMethod(
+                    className: className,
+                    pluginName: pluginName,
+                    metadata: GodotMethodMetadata(
+                        canonicalName: methodName,
+                        selector: NSSelectorFromString(methodName),
+                        argumentNames: (0..<argCount).map { "arg\($0)" },
+                        argumentTypes: [GDExtensionVariantType](repeating: GDEXTENSION_VARIANT_TYPE_NIL, count: argCount),
+                        returnType: GDEXTENSION_VARIANT_TYPE_NIL
+                    )
+                )
+            }
         }
 
         // 3. Register Signals
@@ -178,14 +202,35 @@ public final class GodotClassDB: @unchecked Sendable {
         }
     }
 
+    /// Helper safely borrowing string name pointers for ClassDB argument registration.
+    private func withArgNamePointers<R>(
+        stringNames: [GodotStringName],
+        index: Int = 0,
+        ptrs: [GDExtensionStringNamePtr] = [],
+        _ body: ([GDExtensionStringNamePtr]) throws -> R
+    ) rethrows -> R {
+        if index >= stringNames.count {
+            return try body(ptrs)
+        }
+        return try stringNames[index].withUnsafeMutableRawPointer { ptr in
+            var next = ptrs
+            next.append(ptr)
+            return try withArgNamePointers(stringNames: stringNames, index: index + 1, ptrs: next, body)
+        }
+    }
+
     /// Registers a method for a plugin class in ClassDB.
-    private func registerMethod(className: String, pluginName: String, methodName: String) {
+    private func registerMethod(
+        className: String,
+        pluginName: String,
+        metadata: GodotMethodMetadata
+    ) {
         guard let gi = GodotInterface.shared.isInitialized ? GodotInterface.shared : nil,
               let registerMethodFunc = gi.classdb_register_extension_class_method else {
             return
         }
 
-        let methodData = MethodBindingData(pluginName: pluginName, className: className, methodName: methodName)
+        let methodData = MethodBindingData(pluginName: pluginName, className: className, metadata: metadata)
         let methodDataPtr = Unmanaged.passRetained(methodData).toOpaque()
         retainedBindings.append(methodDataPtr)
 
@@ -196,62 +241,153 @@ public final class GodotClassDB: @unchecked Sendable {
             emptyString.withUnsafeMutableRawPointer { emptyStrPtr in
                 methodData.methodStringName.withUnsafeMutableRawPointer { methodNamePtr in
                     GodotStringName.cached(className).withUnsafeRawPointer { classNamePtr in
-                        var returnProp = GDExtensionPropertyInfo(
-                            type: GDEXTENSION_VARIANT_TYPE_NIL,
-                            name: emptyNamePtr,
-                            class_name: emptyNamePtr,
-                            hint: 0,
-                            hint_string: emptyStrPtr,
-                            usage: 6 | (1 << 17) // PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_NIL_IS_VARIANT
-                        )
+                        let argCount = metadata.argumentNames.count
+                        let argNameObjects = metadata.argumentNames.map { GodotStringName.cached($0) }
 
-                        withUnsafeMutablePointer(to: &returnProp) { returnPropPtr in
-                            var methodInfo = GDExtensionClassMethodInfo()
-                            methodInfo.name = methodNamePtr
-                            methodInfo.method_userdata = methodDataPtr
-                            methodInfo.method_flags = 1 // GDEXTENSION_METHOD_FLAGS_DEFAULT
-                            methodInfo.has_return_value = 1
-                            methodInfo.return_value_info = returnPropPtr
-                            methodInfo.return_value_metadata = GDEXTENSION_METHOD_ARGUMENT_METADATA_NONE
-                            methodInfo.argument_count = 0
-                            methodInfo.arguments_info = nil
-                            methodInfo.arguments_metadata = nil
-                            methodInfo.default_argument_count = 0
-                            methodInfo.default_arguments = nil
+                        withArgNamePointers(stringNames: argNameObjects) { argNamePtrs in
+                            var argProps: [GDExtensionPropertyInfo] = []
+                            var argMetadata: [GDExtensionClassMethodArgumentMetadata] = []
+                            argProps.reserveCapacity(argCount)
+                            argMetadata.reserveCapacity(argCount)
 
-                            methodInfo.call_func = { methodUserdata, instancePtr, args, argCount, returnPtr, errorPtr in
-                                guard let methodUserdata else { return }
-                                let binding = Unmanaged<MethodBindingData>.fromOpaque(methodUserdata).takeUnretainedValue()
-
-                                let swiftArgs = GodotVariant.toSwiftArray(args: args, count: Int(argCount))
-                                let result = GodotPluginRegistry.shared.callMethod(
-                                    pluginName: binding.pluginName,
-                                    methodName: binding.methodName,
-                                    args: swiftArgs
-                                )
-
-                                if let returnPtr {
-                                    GodotVariant.writeVariant(result, to: returnPtr)
-                                }
-                                errorPtr?.pointee.error = GDEXTENSION_CALL_OK
+                            for i in 0..<argCount {
+                                let argType = metadata.argumentTypes[i]
+                                argProps.append(GDExtensionPropertyInfo(
+                                    type: argType,
+                                    name: argNamePtrs[i],
+                                    class_name: emptyNamePtr,
+                                    hint: 0,
+                                    hint_string: emptyStrPtr,
+                                    usage: argType == GDEXTENSION_VARIANT_TYPE_NIL ? (6 | (1 << 17)) : 6
+                                ))
+                                argMetadata.append(GDEXTENSION_METHOD_ARGUMENT_METADATA_NONE)
                             }
 
-                            methodInfo.ptrcall_func = { methodUserdata, instancePtr, args, returnPtr in
-                                guard let methodUserdata else { return }
-                                let binding = Unmanaged<MethodBindingData>.fromOpaque(methodUserdata).takeUnretainedValue()
+                            argProps.withUnsafeMutableBufferPointer { argPropsBuf in
+                                argMetadata.withUnsafeMutableBufferPointer { argMetaBuf in
+                                    let hasReturn = metadata.returnType != nil
+                                    let retType = metadata.returnType ?? GDEXTENSION_VARIANT_TYPE_NIL
 
-                                let result = GodotPluginRegistry.shared.callMethod(
-                                    pluginName: binding.pluginName,
-                                    methodName: binding.methodName,
-                                    args: []
-                                )
+                                    var returnProp = GDExtensionPropertyInfo(
+                                        type: retType,
+                                        name: emptyNamePtr,
+                                        class_name: emptyNamePtr,
+                                        hint: 0,
+                                        hint_string: emptyStrPtr,
+                                        usage: retType == GDEXTENSION_VARIANT_TYPE_NIL ? (6 | (1 << 17)) : 6
+                                    )
 
-                                if let returnPtr {
-                                    GodotVariant.writeVariant(result, to: returnPtr)
+                                    withUnsafeMutablePointer(to: &returnProp) { returnPropPtr in
+                                        var methodInfo = GDExtensionClassMethodInfo()
+                                        methodInfo.name = methodNamePtr
+                                        methodInfo.method_userdata = methodDataPtr
+                                        methodInfo.method_flags = 1 // GDEXTENSION_METHOD_FLAGS_DEFAULT
+                                        methodInfo.has_return_value = hasReturn ? 1 : 0
+                                        methodInfo.return_value_info = hasReturn ? returnPropPtr : nil
+                                        methodInfo.return_value_metadata = GDEXTENSION_METHOD_ARGUMENT_METADATA_NONE
+                                        methodInfo.argument_count = UInt32(argCount)
+                                        methodInfo.arguments_info = argCount > 0 ? argPropsBuf.baseAddress : nil
+                                        methodInfo.arguments_metadata = argCount > 0 ? argMetaBuf.baseAddress : nil
+                                        methodInfo.default_argument_count = 0
+                                        methodInfo.default_arguments = nil
+
+                                        methodInfo.call_func = { methodUserdata, instancePtr, args, argCount, returnPtr, errorPtr in
+                                            guard let methodUserdata else { return }
+                                            let binding = Unmanaged<MethodBindingData>.fromOpaque(methodUserdata).takeUnretainedValue()
+
+                                            let swiftArgs = GodotVariant.toSwiftArray(args: args, count: Int(argCount))
+                                            let result = GodotPluginRegistry.shared.callMethod(
+                                                pluginName: binding.pluginName,
+                                                methodName: binding.methodName,
+                                                args: swiftArgs
+                                            )
+
+                                            if let returnPtr {
+                                                GodotVariant.writeVariant(result, to: returnPtr)
+                                            }
+                                            errorPtr?.pointee.error = GDEXTENSION_CALL_OK
+                                        }
+
+                                        methodInfo.ptrcall_func = { methodUserdata, instancePtr, args, returnPtr in
+                                            guard let methodUserdata else { return }
+                                            let binding = Unmanaged<MethodBindingData>.fromOpaque(methodUserdata).takeUnretainedValue()
+                                            guard let gi = GodotInterface.shared.isInitialized ? GodotInterface.shared : nil else { return }
+
+                                            let expectedArgTypes = binding.metadata.argumentTypes
+                                            var swiftArgs: [Any] = []
+                                            swiftArgs.reserveCapacity(expectedArgTypes.count)
+
+                                            for i in 0..<expectedArgTypes.count {
+                                                guard let argPtr = args?[i] else {
+                                                    swiftArgs.append(())
+                                                    continue
+                                                }
+
+                                                switch expectedArgTypes[i] {
+                                                case GDEXTENSION_VARIANT_TYPE_BOOL:
+                                                    swiftArgs.append(argPtr.assumingMemoryBound(to: UInt8.self).pointee != 0)
+                                                case GDEXTENSION_VARIANT_TYPE_INT:
+                                                    swiftArgs.append(Int(argPtr.assumingMemoryBound(to: Int64.self).pointee))
+                                                case GDEXTENSION_VARIANT_TYPE_FLOAT:
+                                                    swiftArgs.append(argPtr.assumingMemoryBound(to: Double.self).pointee)
+                                                case GDEXTENSION_VARIANT_TYPE_STRING:
+                                                    if let toUtf8 = gi.string_to_utf8_chars {
+                                                        let len = toUtf8(UnsafeMutableRawPointer(mutating: argPtr), nil, 0)
+                                                        var buffer = [CChar](repeating: 0, count: Int(len) + 1)
+                                                        _ = toUtf8(UnsafeMutableRawPointer(mutating: argPtr), &buffer, len)
+                                                        swiftArgs.append(String(cString: buffer))
+                                                    } else {
+                                                        swiftArgs.append("")
+                                                    }
+                                                default:
+                                                    if let val = GodotVariant.toSwift(argPtr) {
+                                                        swiftArgs.append(val)
+                                                    } else {
+                                                        swiftArgs.append(())
+                                                    }
+                                                }
+                                            }
+
+                                            let result = GodotPluginRegistry.shared.callMethod(
+                                                pluginName: binding.pluginName,
+                                                methodName: binding.methodName,
+                                                args: swiftArgs
+                                            )
+
+                                            if let returnPtr {
+                                                if let retType = binding.metadata.returnType {
+                                                    switch retType {
+                                                    case GDEXTENSION_VARIANT_TYPE_BOOL:
+                                                        returnPtr.assumingMemoryBound(to: UInt8.self).pointee = ((result as? Bool) ?? false) ? 1 : 0
+                                                    case GDEXTENSION_VARIANT_TYPE_INT:
+                                                        returnPtr.assumingMemoryBound(to: Int64.self).pointee = Int64((result as? Int) ?? 0)
+                                                    case GDEXTENSION_VARIANT_TYPE_FLOAT:
+                                                        if let doubleVal = result as? Double {
+                                                            returnPtr.assumingMemoryBound(to: Double.self).pointee = doubleVal
+                                                        } else if let floatVal = result as? Float {
+                                                            returnPtr.assumingMemoryBound(to: Double.self).pointee = Double(floatVal)
+                                                        } else {
+                                                            returnPtr.assumingMemoryBound(to: Double.self).pointee = 0.0
+                                                        }
+                                                    case GDEXTENSION_VARIANT_TYPE_STRING:
+                                                        if let strVal = result as? String, let newWithUtf8 = gi.string_new_with_utf8_chars {
+                                                            strVal.withCString { cstr in
+                                                                newWithUtf8(returnPtr, cstr)
+                                                            }
+                                                        }
+                                                    default:
+                                                        GodotVariant.writeVariant(result, to: returnPtr)
+                                                    }
+                                                } else {
+                                                    // Void return - nothing to write
+                                                }
+                                            }
+                                        }
+
+                                        registerMethodFunc(gi.library, classNamePtr, &methodInfo)
+                                    }
                                 }
                             }
-
-                            registerMethodFunc(gi.library, classNamePtr, &methodInfo)
                         }
                     }
                 }
@@ -343,19 +479,23 @@ public final class GodotClassDB: @unchecked Sendable {
             self.lock.unlock()
 
             guard let classData,
-                  let godotObj = classData.godotObject,
                   let gi = GodotInterface.shared.isInitialized ? GodotInterface.shared : nil,
                   let variantCall = gi.variant_call,
                   let variantFromObj = gi.variantFromObject else {
                 return
             }
 
-            var objVariant = GodotVariantBuffer()
-            defer { objVariant.destroy(using: gi) }
-            objVariant.withUnsafeMutableRawPointer { objVarPtr in
-                var copy = godotObj
-                variantFromObj(objVarPtr, &copy)
+            var targetObjects: [GDExtensionObjectPtr] = []
+            if let single = classData.godotObject {
+                targetObjects.append(single)
             }
+            for inst in classData.instances {
+                if inst != classData.godotObject {
+                    targetObjects.append(inst)
+                }
+            }
+
+            guard !targetObjects.isEmpty else { return }
 
             var signalNameVariant = GodotVariantBuffer()
             defer { signalNameVariant.destroy(using: gi) }
@@ -386,22 +526,31 @@ public final class GodotClassDB: @unchecked Sendable {
                         rawArgPointers.append(aPtr)
                     }
 
-                    var retVariant = GodotVariantBuffer()
-                    defer { retVariant.destroy(using: gi) }
-                    var error = GDExtensionCallError()
+                    for targetObj in targetObjects {
+                        var objVariant = GodotVariantBuffer()
+                        defer { objVariant.destroy(using: gi) }
+                        objVariant.withUnsafeMutableRawPointer { objVarPtr in
+                            var copy = targetObj
+                            variantFromObj(objVarPtr, &copy)
+                        }
 
-                    objVariant.withUnsafeMutableRawPointer { objVarPtr in
-                        retVariant.withUnsafeMutableRawPointer { retVarPtr in
-                            GodotStringName.cached("emit_signal").withUnsafeRawPointer { methodPtr in
-                                rawArgPointers.withUnsafeMutableBufferPointer { rawArgsBuf in
-                                    variantCall(
-                                        objVarPtr,
-                                        methodPtr,
-                                        rawArgsBuf.baseAddress,
-                                        GDExtensionInt(rawArgsBuf.count),
-                                        retVarPtr,
-                                        &error
-                                    )
+                        var retVariant = GodotVariantBuffer()
+                        defer { retVariant.destroy(using: gi) }
+                        var error = GDExtensionCallError()
+
+                        objVariant.withUnsafeMutableRawPointer { objVarPtr in
+                            retVariant.withUnsafeMutableRawPointer { retVarPtr in
+                                GodotStringName.cached("emit_signal").withUnsafeRawPointer { methodPtr in
+                                    rawArgPointers.withUnsafeMutableBufferPointer { rawArgsBuf in
+                                        variantCall(
+                                            objVarPtr,
+                                            methodPtr,
+                                            rawArgsBuf.baseAddress,
+                                            GDExtensionInt(rawArgsBuf.count),
+                                            retVarPtr,
+                                            &error
+                                        )
+                                    }
                                 }
                             }
                         }

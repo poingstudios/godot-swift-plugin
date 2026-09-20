@@ -22,6 +22,8 @@
 
 extends Control
 
+var _plugin: GodotExamplePlugin
+
 @onready var _log_label := $VBoxContainer/ScrollContainer/LogLabel as RichTextLabel
 @onready var _btn_ping := $VBoxContainer/GridContainer/BtnPing as Button
 @onready var _btn_add := $VBoxContainer/GridContainer/BtnAdd as Button
@@ -33,25 +35,32 @@ extends Control
 @onready var _btn_sig_profile := $VBoxContainer/GridContainer/BtnSigProfile as Button
 @onready var _btn_sig_score := $VBoxContainer/GridContainer/BtnSigScore as Button
 @onready var _btn_sig_end := $VBoxContainer/GridContainer/BtnSigEnd as Button
-@onready var _btn_switch_direct := $VBoxContainer/BtnSwitchToDirect as Button
+@onready var _btn_switch := $VBoxContainer/BtnSwitchToWrapper as Button
 
 
 func _ready() -> void:
-	_connect_plugin_signals()
+	_init_plugin()
 	_connect_ui_buttons()
-	_log("[color=yellow]Godot Swift Plugin Sample Ready.[/color]")
-	var singleton := ExamplePlugin.get_singleton()
-	if singleton:
-		_log("[color=green]Native 'Example' singleton found![/color]")
-	else:
-		_log("[color=orange]Native 'Example' singleton not found. Running in fallback mode.[/color]")
+	_log("[color=yellow]Direct Swift Sample Ready (No Wrapper, No Singleton).[/color]")
 
 	if DisplayServer.get_name() == "headless":
 		_run_headless_verification()
 
 
+func _init_plugin() -> void:
+	if not ClassDB.class_exists("GodotExamplePlugin"):
+		_log("[color=red]Error: GodotExamplePlugin is not registered in ClassDB.[/color]")
+		return
+
+	_plugin = GodotExamplePlugin.new()
+	_plugin.session_ended.connect(_on_session_ended)
+	_plugin.user_profile_updated.connect(_on_user_profile_updated)
+	_plugin.score_calculated.connect(_on_score_calculated)
+	_log("[color=green]Direct instance of GodotExamplePlugin successfully created via .new()[/color]")
+
+
 func _run_headless_verification() -> void:
-	_log("[TEST] Running automated headless verification...")
+	_log("[TEST] Running automated direct class headless verification...")
 	_on_btn_ping_pressed()
 	_on_btn_add_pressed()
 	_on_btn_mult_pressed()
@@ -59,16 +68,11 @@ func _run_headless_verification() -> void:
 	_on_btn_update_profile_pressed()
 	_on_btn_start_session_pressed()
 	_on_btn_end_session_pressed()
-	ExamplePlugin.trigger_profile_signal()
-	ExamplePlugin.trigger_score_signal(999)
-	ExamplePlugin.trigger_session_end_signal()
-	_log("[TEST] Headless verification sequence finished.")
-
-
-func _connect_plugin_signals() -> void:
-	ExamplePlugin.session_ended.connect(_on_session_ended)
-	ExamplePlugin.user_profile_updated.connect(_on_user_profile_updated)
-	ExamplePlugin.score_calculated.connect(_on_score_calculated)
+	if _plugin:
+		_plugin.trigger_profile_signal()
+		_plugin.trigger_score_signal(999)
+		_plugin.trigger_session_end_signal()
+	_log("[TEST] Direct class headless verification sequence finished.")
 
 
 func _connect_ui_buttons() -> void:
@@ -79,63 +83,93 @@ func _connect_ui_buttons() -> void:
 	_btn_update_profile.pressed.connect(_on_btn_update_profile_pressed)
 	_btn_start_session.pressed.connect(_on_btn_start_session_pressed)
 	_btn_end_session.pressed.connect(_on_btn_end_session_pressed)
-	_btn_sig_profile.pressed.connect(ExamplePlugin.trigger_profile_signal)
-	_btn_sig_score.pressed.connect(func() -> void: ExamplePlugin.trigger_score_signal(777))
-	_btn_sig_end.pressed.connect(ExamplePlugin.trigger_session_end_signal)
-	_btn_switch_direct.pressed.connect(_on_btn_switch_direct_pressed)
-
-
-func _on_btn_switch_direct_pressed() -> void:
-	get_tree().change_scene_to_file("res://sample/direct_sample.tscn")
+	_btn_sig_profile.pressed.connect(_on_btn_sig_profile_pressed)
+	_btn_sig_score.pressed.connect(_on_btn_sig_score_pressed)
+	_btn_sig_end.pressed.connect(_on_btn_sig_end_pressed)
+	_btn_switch.pressed.connect(_on_btn_switch_pressed)
 
 
 func _on_btn_ping_pressed() -> void:
-	var response := ExamplePlugin.ping("Godot Dev")
-	_log("[color=cyan]Ping response:[/color] %s" % response)
+	if not _plugin:
+		return
+	var response: String = _plugin.ping("DirectCaller")
+	_log("[color=cyan]Direct ping response:[/color] %s" % response)
 
 
 func _on_btn_add_pressed() -> void:
-	var result := ExamplePlugin.add_numbers(15, 27)
-	_log("[color=cyan]15 + 27 =[/color] %d" % result)
+	if not _plugin:
+		return
+	var result: int = _plugin.add_numbers(15, 27)
+	_log("[color=cyan]Direct 15 + 27 =[/color] %d" % result)
 
 
 func _on_btn_mult_pressed() -> void:
-	var result := ExamplePlugin.multiply_numbers(8, 9)
-	_log("[color=cyan]8 * 9 =[/color] %d" % result)
+	if not _plugin:
+		return
+	var result: int = _plugin.multiply_numbers(8, 9)
+	_log("[color=cyan]Direct 8 * 9 =[/color] %d" % result)
 
 
 func _on_btn_profile_pressed() -> void:
-	var profile := ExamplePlugin.get_user_profile()
-	_log("[color=cyan]Profile:[/color] %s" % str(profile))
+	if not _plugin:
+		return
+	var profile: Dictionary = _plugin.get_user_profile()
+	_log("[color=cyan]Direct Profile:[/color] %s" % str(profile))
 
 
 func _on_btn_update_profile_pressed() -> void:
-	var profile := ExamplePlugin.update_user_profile("SwiftHero", 42)
-	_log("[color=cyan]Updated Profile:[/color] %s" % str(profile))
+	if not _plugin:
+		return
+	var profile: Dictionary = _plugin.update_user_profile("DirectSwiftHero", 77)
+	_log("[color=cyan]Direct Updated Profile:[/color] %s" % str(profile))
 
 
 func _on_btn_start_session_pressed() -> void:
-	var success := ExamplePlugin.start_session("sess_swift_001")
-	var is_active := ExamplePlugin.is_session_active()
-	_log("[color=cyan]Start session:[/color] %s (active=%s)" % [str(success), str(is_active)])
+	if not _plugin:
+		return
+	var success: bool = _plugin.start_session("sess_direct_001")
+	var is_active: bool = _plugin.is_session_active()
+	_log("[color=cyan]Direct Start session:[/color] %s (active=%s)" % [str(success), str(is_active)])
 
 
 func _on_btn_end_session_pressed() -> void:
-	var success := ExamplePlugin.end_session()
-	var is_active := ExamplePlugin.is_session_active()
-	_log("[color=cyan]End session:[/color] %s (active=%s)" % [str(success), str(is_active)])
+	if not _plugin:
+		return
+	var success: bool = _plugin.end_session()
+	var is_active: bool = _plugin.is_session_active()
+	_log("[color=cyan]Direct End session:[/color] %s (active=%s)" % [str(success), str(is_active)])
+
+
+func _on_btn_sig_profile_pressed() -> void:
+	if _plugin:
+		_plugin.trigger_profile_signal()
+
+
+func _on_btn_sig_score_pressed() -> void:
+	if _plugin:
+		_plugin.trigger_score_signal(777)
+
+
+func _on_btn_sig_end_pressed() -> void:
+	if _plugin:
+		_plugin.trigger_session_end_signal()
+
+
+func _on_btn_switch_pressed() -> void:
+	get_tree().change_scene_to_file("res://sample/sample.tscn")
 
 
 func _on_session_ended() -> void:
-	_log("[color=magenta]SIGNAL RECEIVED: session_ended[/color]")
+	_log("[color=magenta]DIRECT SIGNAL RECEIVED: session_ended[/color]")
 
 
 func _on_user_profile_updated(profile: Dictionary) -> void:
-	_log("[color=magenta]SIGNAL RECEIVED: user_profile_updated -> %s[/color]" % str(profile))
+	_log("[color=magenta]DIRECT SIGNAL RECEIVED: user_profile_updated -> %s[/color]" % str(profile))
 
 
 func _on_score_calculated(score: int, operation: String) -> void:
-	_log("[color=magenta]SIGNAL RECEIVED: score_calculated -> %d (%s)[/color]" % [score, operation])
+	var msg := "[color=magenta]DIRECT SIGNAL RECEIVED: score_calculated -> %d (%s)[/color]"
+	_log(msg % [score, operation])
 
 
 func _log(bbcode: String) -> void:

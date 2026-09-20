@@ -88,12 +88,12 @@ open class GodotPlugin: NSObject {
     open func registerMethods(in registry: GodotPluginRegistry) {
         let name = Self.pluginName
 
-        // 1. Auto-discover candidate @objc methods
-        let discovered = GodotRuntimeDispatcher.discoverMethods(for: self)
-        for (methodName, sel) in discovered {
-            registry.registerMethod(pluginName: name, methodName: methodName) { [weak self] args in
+        // 1. Auto-discover candidate @objc methods with typed metadata
+        let metadataList = GodotRuntimeDispatcher.discoverMethodMetadata(for: self)
+        for meta in metadataList {
+            registry.registerMethod(pluginName: name, metadata: meta) { [weak self] args in
                 guard let self else { return nil }
-                return GodotRuntimeDispatcher.dynamicInvoke(target: self, selector: sel, args: args)
+                return GodotRuntimeDispatcher.dynamicInvoke(target: self, selector: meta.selector, args: args)
             }
         }
 
